@@ -137,6 +137,83 @@ const workshopOrder = [
   'block-c', 'block-d', 'block-e', 'floor', 'wall',
 ];
 
+const ellipse = (cx: number, cy: number, rx: number, ry: number) =>
+  `M${cx} ${cy - ry} A${rx} ${ry} 0 1 1 ${cx} ${cy + ry} A${rx} ${ry} 0 1 1 ${cx} ${cy - ry} Z`;
+
+/** A simple pointed leaf centered at (x, y). */
+const leaf = (id: string, x: number, y: number, s: number, color: string): Part => ({
+  id,
+  d: `M${x} ${y - 14 * s} Q${x + 14 * s} ${y} ${x} ${y + 14 * s} Q${x - 14 * s} ${y} ${x} ${y - 14 * s} Z`,
+  color,
+  detail: `M${x} ${y - 12 * s} L${x} ${y + 12 * s}`,
+});
+
+const pumpkin = (id: string, cx: number, cy: number, r: number): Part => ({
+  id,
+  d: ellipse(cx, cy, n(r * 1.3), r),
+  color: C.orange,
+  detail: `M${cx} ${cy - r} Q${n(cx - r * 0.6)} ${cy} ${cx} ${cy + r} M${cx} ${cy - r} Q${n(cx + r * 0.6)} ${cy} ${cx} ${cy + r}`,
+});
+
+/** Tail feather fanning out from (400, 370) at angle `deg`. */
+const feather = (i: number, deg: number, color: string): Part => {
+  const a = (deg * Math.PI) / 180;
+  const dx = Math.cos(a), dy = Math.sin(a);
+  const px = -dy, py = dx;
+  const at = (along: number, side: number) => `${n(400 + dx * along + px * side)} ${n(370 + dy * along + py * side)}`;
+  return { id: `feather-${i}`, d: `M400 370 Q${at(120, 50)} ${at(200, 0)} Q${at(120, -50)} 400 370 Z`, color, detail: `M${at(60, 0)} L${at(180, 0)}` };
+};
+
+const harvestParts: Part[] = [
+  // Sky and land
+  { id: 'sky', d: rect(0, 0, 800, 400), color: C.sky },
+  { id: 'sun', d: circle(690, 90, 44), color: C.yellow },
+  { id: 'cloud', d: 'M96 118 Q76 92 108 78 Q116 42 156 40 Q192 40 200 68 Q230 72 224 102 Q220 120 196 120 L110 120 Q100 120 96 118 Z', color: C.white },
+  { id: 'hills', d: 'M0 340 Q200 260 420 330 Q600 250 800 310 L800 410 L0 410 Z', color: C.green },
+  // Barn and fence
+  { id: 'barn', d: 'M570 230 L665 160 L760 230 L760 392 L570 392 Z', color: C.red, detail: 'M598 240 V392 M732 240 V392' },
+  { id: 'barn-door', d: rect(625, 300, 80, 92), color: C.white, detail: 'M625 300 L705 392 M705 300 L625 392' },
+  { id: 'barn-window', d: rect(650, 206, 30, 30), color: C.yellow },
+  { id: 'rails', d: `${rect(0, 330, 330, 12)} ${rect(0, 362, 330, 12)}`, color: C.wood },
+  { id: 'posts', d: [20, 100, 180, 260].map((x) => rect(x, 312, 16, 90)).join(' '), color: C.wood },
+  { id: 'ground', d: 'M0 392 Q400 360 800 392 L800 600 L0 600 Z', color: C.tan },
+  { id: 'hay', d: rrect(50, 390, 160, 84, 14), color: C.gold, detail: 'M70 410 H190 M64 432 H196 M70 454 H190' },
+  // Falling leaves
+  leaf('leaf-a', 110, 196, 1.4, C.orange),
+  leaf('leaf-b', 280, 112, 1.2, C.red),
+  leaf('leaf-c', 520, 108, 1.3, C.yellow),
+  leaf('leaf-d', 780, 152, 1.1, C.brown),
+  // Turkey
+  ...[200, 228, 254, 286, 312, 340].map((deg, i) => feather(i + 1, deg, [C.red, C.orange, C.yellow, C.yellow, C.orange, C.red][i])),
+  {
+    id: 'legs',
+    d: `${rect(372, 488, 10, 36)} ${rect(418, 488, 10, 36)} M356 522 L398 522 L394 532 L360 532 Z M402 522 L444 522 L440 532 L406 532 Z`,
+    color: C.orange,
+  },
+  { id: 'body', d: ellipse(400, 410, 80, 90), color: C.brown, detail: 'M352 392 Q338 446 378 474 M448 392 Q462 446 422 474' },
+  { id: 'head', d: circle(400, 290, 40), color: C.wood, detail: 'M386 283 L386 287 M414 283 L414 287' },
+  { id: 'beak', d: 'M390 298 L410 298 L400 316 Z', color: C.orange },
+  { id: 'wattle', d: 'M405 308 Q420 318 412 338 Q398 330 403 312 Z', color: C.red },
+  { id: 'hat', d: `${rect(358, 244, 84, 12)} ${rect(372, 204, 56, 40)}`, color: C.black },
+  { id: 'hat-buckle', d: rrect(388, 222, 24, 18, 3), color: C.gold, detail: 'M394 227 H406 V235 H394 Z' },
+  // Harvest in front
+  pumpkin('pumpkin-a', 150, 530, 40),
+  pumpkin('pumpkin-b', 640, 530, 48),
+  pumpkin('pumpkin-c', 735, 556, 30),
+  { id: 'stems', d: `${rect(145, 476, 10, 18)} ${rect(635, 466, 10, 20)} ${rect(731, 514, 8, 14)}`, color: C.forest },
+  { id: 'corn', d: 'M265 450 Q285 500 265 550 Q245 500 265 450 Z', color: C.yellow, detail: 'M257 472 H273 M255 492 H275 M255 512 H275 M257 532 H273 M265 458 V542' },
+  { id: 'husks', d: 'M265 552 Q226 520 240 462 Q252 512 265 552 Z M265 552 Q304 520 290 462 Q278 512 265 552 Z', color: C.green },
+];
+
+const harvestOrder = [
+  'head', 'beak', 'wattle', 'hat', 'hat-buckle', 'body', 'legs',
+  'feather-1', 'feather-2', 'feather-3', 'feather-4', 'feather-5', 'feather-6',
+  'pumpkin-a', 'pumpkin-b', 'pumpkin-c', 'stems', 'corn', 'husks', 'hay',
+  'leaf-a', 'leaf-b', 'leaf-c', 'leaf-d',
+  'barn', 'barn-door', 'barn-window', 'rails', 'posts',
+  'sun', 'cloud', 'hills', 'ground', 'sky',
+];
+
 export const PAGES: Level[] = [
   page(
     'santa-workshop',
@@ -147,5 +224,15 @@ export const PAGES: Level[] = [
     workshopOrder,
     [C.red, C.green, C.white, C.yellow, C.gold, C.blue, C.sky, C.navy, C.brown, C.wood, C.tan, C.cream, C.peach, C.pink, C.purple, C.orange, C.forest, C.black],
     'marker',
+  ),
+  page(
+    'thanksgiving-harvest',
+    'Thanksgiving Harvest',
+    800,
+    600,
+    harvestParts,
+    harvestOrder,
+    [C.red, C.orange, C.yellow, C.gold, C.brown, C.wood, C.tan, C.green, C.forest, C.sky, C.white, C.black, C.purple, C.pink, C.peach, C.cream],
+    'crayon',
   ),
 ];

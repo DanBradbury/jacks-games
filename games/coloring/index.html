@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Doodle &amp; Color</title>
+    <!-- YouTube Playables SDK: must load before any game code. -->
+    <script src="https://www.youtube.com/game_api/v1"></script>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game"></canvas>
+
+      <div id="hud">
+        <button id="btn-levels" class="icon-btn" aria-label="Pictures">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg>
+        </button>
+        <div id="title">
+          <div id="level-label">LEVEL 1</div>
+          <div id="bubble">
+            <canvas id="avatar"></canvas>
+            <span id="bubble-text">Draw it!</span>
+            <div id="bubble-thumb"></div>
+          </div>
+        </div>
+        <button id="btn-restart" class="icon-btn" aria-label="Start over">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5"/><path d="M4 4v5h5"/></svg>
+        </button>
+      </div>
+
+      <div id="bottom">
+        <div id="palette"></div>
+        <div id="tools"></div>
+        <button id="btn-done" class="done-btn hidden" aria-label="Done with this color">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+        </button>
+      </div>
+
+      <div id="praise" aria-hidden="true"></div>
+
+      <div id="check" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+      </div>
+
+      <div id="complete" class="overlay hidden">
+        <div class="wave-header">
+          <h1>COMPLETED!</h1>
+          <svg class="wave" viewBox="0 0 400 40" preserveAspectRatio="none"><path d="M0 0H400V18C370 34 340 10 300 20S240 38 200 22S130 6 100 22S30 36 0 18Z"/></svg>
+        </div>
+        <div id="complete-art"></div>
+        <div class="row">
+          <button id="btn-replay" class="icon-btn round" aria-label="Play again">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5"/><path d="M4 4v5h5"/></svg>
+          </button>
+          <button id="btn-next" class="next-btn" aria-label="Next picture">
+            <svg viewBox="0 0 32 24" fill="#fff" stroke="#1b1b1f" stroke-width="2.4" stroke-linejoin="round"><path d="M3 9h14V3l12 9-12 9v-6H3z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div id="levels" class="overlay hidden">
+        <div class="levels-head">
+          <h2>PICTURES</h2>
+          <button id="btn-close" class="icon-btn" aria-label="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          </button>
+        </div>
+        <div class="levels-body">
+          <h3>Draw &amp; Color</h3>
+          <div id="level-grid" class="card-grid"></div>
+          <h3>Coloring Pages</h3>
+          <div id="page-grid" class="card-grid"></div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

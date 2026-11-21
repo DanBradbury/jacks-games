@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dice Dungeon</title>
+<style>
+  @page { size: letter; margin: 0.3in; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #fff; color: #000; }
+  body { font-family: "Trebuchet MS", "Arial Rounded MT Bold", Arial, sans-serif; }
+
+  .page {
+    width: 7.9in; height: 10.4in; margin: 0 auto; overflow: hidden;
+    page-break-after: always; break-after: page; position: relative;
+  }
+  .page:last-child { page-break-after: auto; break-after: auto; }
+  @media screen {
+    body { background: #ddd; padding: 20px 0; }
+    .page { background: #fff; margin-bottom: 20px; padding: 0.15in; box-shadow: 0 2px 8px rgba(0,0,0,.3); height: auto; min-height: 10.4in; }
+  }
+
+  /* SVG ink */
+  .ink { fill: #fff; stroke: #000; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+  .ink .n { fill: none; }
+  .ink .k { fill: #000; }
+  .ink .g { fill: #bbb; }
+
+  /* ---------- cards ---------- */
+  .sheet { display: grid; grid-template-columns: repeat(3, 2.48in); grid-auto-rows: 3.44in; gap: 0; justify-content: center; }
+  .card {
+    width: 2.48in; height: 3.44in; border: 1px dashed #888; padding: 0.09in;
+    display: flex; flex-direction: column;
+  }
+  .card-in {
+    flex: 1; border: 2.5px solid #000; border-radius: 0.14in; display: flex; flex-direction: column;
+    overflow: hidden; position: relative;
+  }
+  .enemy .card-in { border-width: 5px; }
+  .hdr { text-align: center; font-weight: 900; font-size: 15px; padding: 5px 4px 3px; letter-spacing: .5px; border-bottom: 2px solid #000; }
+  .enemy .hdr { background: #000; color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; }
+  .art { flex: 1; display: flex; align-items: center; justify-content: center; padding: 4px 10px; min-height: 0; }
+  .art svg { width: 100%; height: 100%; max-height: 1.65in; }
+  .ftr { border-top: 2px solid #000; padding: 6px 6px; display: flex; align-items: center; justify-content: center; gap: 4px; min-height: 0.72in; flex-wrap: wrap; }
+  .ftr svg { height: 0.5in; width: auto; }
+  .ftr.cols { display: grid; justify-content: center; gap: 3px 4px; }
+  .ftr.cols svg { height: 0.36in; }
+  .plus { font-size: 22px; font-weight: 900; }
+  .tag { position: absolute; top: 30px; right: 6px; }
+  .tag svg { width: 26px; height: 26px; }
+  .note { font-size: 10.5px; text-align: center; padding: 3px 6px; border-top: 1.5px dashed #000; line-height: 1.2; display: flex; align-items: center; gap: 5px; justify-content: center; }
+  .note svg { height: 22px; width: auto; flex: none; }
+  .badge { position: relative; width: 0.72in; height: 0.72in; }
+  .badge svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .badge b { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 900; padding-bottom: 4px; }
+  .enemy .ftr { justify-content: space-between; padding: 4px 10px; }
+  .hits { display: flex; gap: 2px; }
+  .hits svg { height: 0.36in; }
+  .ranks svg { width: 14px; height: 14px; margin-left: 2px; }
+  .blank-lines { flex: 1; }
+
+  /* ---------- board / rules ---------- */
+  h1 { font-size: 40px; margin: 0; text-align: center; letter-spacing: 2px; }
+  h2 { font-size: 18px; margin: 10px 0 4px; border-bottom: 2px solid #000; }
+  .sub { text-align: center; font-size: 13px; margin: 2px 0 6px; }
+  .rules { font-size: 11.6px; line-height: 1.32; columns: 2; column-gap: 0.25in; }
+  .rules p, .rules ol, .rules ul { margin: 0 0 5px; }
+  .rules ol, .rules ul { padding-left: 18px; }
+  .rules h2 { break-after: avoid; }
+  .rules section { break-inside: avoid; }
+  .legend { display: flex; gap: 10px; justify-content: space-around; margin: 6px 0; }
+  .legend div { text-align: center; font-size: 11px; font-weight: 700; }
+  .legend svg { height: 40px; display: block; margin: 0 auto 2px; }
+  .hearts { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; margin-top: 4px; }
+  .hearts div { position: relative; min-width: 0; }
+  .hearts svg { width: 100%; height: auto; display: block; }
+  .hearts b { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 20px; padding-bottom: 6px; }
+  .strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 6px; }
+  .strip > div { border: 2px solid #000; border-radius: 10px; padding: 4px; text-align: center; font-size: 11px; font-weight: 700; }
+  .strip svg { height: 50px; width: 100%; }
+  .strip .num { font-size: 18px; font-weight: 900; }
+  table.chart { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.chart td { border: 2px solid #000; padding: 2px 6px; vertical-align: middle; }
+  table.chart td:first-child { width: 22%; text-align: center; font-weight: 900; white-space: nowrap; }
+  table.chart svg { height: 19px; vertical-align: middle; }
+  .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 0.2in; }
+
+  /* ---------- boss ---------- */
+  .boss-wrap { border: 6px solid #000; border-radius: 0.2in; padding: 0.12in 0.18in; height: 10.1in; display: flex; flex-direction: column; }
+  .boss-title { background: #000; color: #fff; text-align: center; font-size: 30px; font-weight: 900; letter-spacing: 2px; border-radius: 10px; padding: 4px; }
+  .boss-art { height: 2.6in; display: flex; justify-content: center; }
+  .boss-art svg { height: 100%; }
+  .hp { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; }
+  .hp div { border: 2px solid #000; aspect-ratio: 2.6; font-size: 9px; display: flex; align-items: flex-end; justify-content: flex-end; padding: 1px 3px; border-radius: 4px; }
+  .hp div:nth-child(10n) { border-width: 3px; }
+  .hp div.half { background: repeating-linear-gradient(45deg, #fff 0 4px, #ccc 4px 6px); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+// ---------- helpers ----------
+const svg = (vb, body, cls = 'ink') => `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg"><g class="${cls}">${body}</g></svg>`;
+const star = (cx, cy, R, r, n = 5) => {
+  const pts = [];
+  for (let i = 0; i < n * 2; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / n, rad = i % 2 ? r : R;
+    pts.push(`${(cx + rad * Math.cos(a)).toFixed(1)},${(cy + rad * Math.sin(a)).toFixed(1)}`);
+  }
+  return `<polygon points="${pts.join(' ')}"/>`;
+};
+const HEART = 'M12 21 C5 15 2 11 2 7.5 C2 4.5 4.5 2 7.5 2 C9.5 2 11 3 12 4.5 C13 3 14.5 2 16.5 2 C19.5 2 22 4.5 22 7.5 C22 11 19 15 12 21 Z';
+const heart = (fill = '#fff') => `<svg viewBox="0 0 24 24"><path d="${HEART}" fill="${fill}" stroke="#000" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
+const brokenHeart = () => `<svg viewBox="0 0 24 24"><path d="${HEART}" fill="#fff" stroke="#000" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 4.5 L10 9 L13.5 12 L10.5 16 L12 21" fill="none" stroke="#000" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
+const skullTiny = () => `<svg viewBox="0 0 20 20"><path d="M3 9 C3 2 17 2 17 9 C17 12 15 13 14 14 V17 H6 V14 C5 13 3 12 3 9Z" fill="#fff" stroke="#000" stroke-width="1.6"/><circle cx="7.3" cy="9" r="2.2"/><circle cx="12.7" cy="9" r="2.2"/></svg>`;
+
+// Dice. White d6 = plain. Green d6 = striped. Purple d20 = outline with star. Red d20 = solid black.
+const pips = (n, color = '#000') => {
+  const P = { 1: [[50, 50]], 2: [[30, 30], [70, 70]], 3: [[28, 28], [50, 50], [72, 72]], 4: [[30, 30], [70, 30], [30, 70], [70, 70]], 5: [[28, 28], [72, 28], [50, 50], [28, 72], [72, 72]], 6: [[30, 26], [70, 26], [30, 50], [70, 50], [30, 74], [70, 74]] }[n];
+  return P.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="9" fill="${color}" stroke="none"/>`).join('');
+};
+const dW = (n = 5) => `<svg viewBox="0 0 100 100"><rect x="5" y="5" width="90" height="90" rx="18" fill="#fff" stroke="#000" stroke-width="6"/>${pips(n)}</svg>`;
+const STRIPES = `<defs><pattern id="st" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="10" height="10" fill="#fff"/><rect width="4" height="10" fill="#9a9a9a"/></pattern></defs>`;
+const dG = (n = 5) => `<svg viewBox="0 0 100 100">${STRIPES}<rect x="5" y="5" width="90" height="90" rx="18" fill="url(#st)" stroke="#000" stroke-width="6"/>${pips(n, '#000').replace(/r="9"/g, 'r="11" stroke="#fff" stroke-width="4"')}</svg>`;
+const D20 = 'M50 4 L92 28 L92 72 L50 96 L8 72 L8 28 Z';
+const dP = () => `<svg viewBox="0 0 100 100"><path d="${D20}" fill="#fff" stroke="#000" stroke-width="6" stroke-linejoin="round"/><path d="M50 22 L76 66 L24 66 Z" fill="none" stroke="#000" stroke-width="3"/><path d="M50 4 L50 22 M92 28 L76 66 M8 28 L24 66 M50 96 L76 66 M50 96 L24 66 M92 72 L76 66 M8 72 L24 66" stroke="#000" stroke-width="3"/>${star(50, 50, 13, 6).replace('<polygon', '<polygon fill="#000"')}</svg>`;
+const dR = () => `<svg viewBox="0 0 100 100"><path d="${D20}" fill="#000" stroke="#000" stroke-width="6" stroke-linejoin="round"/><path d="M50 22 L76 66 L24 66 Z" fill="none" stroke="#fff" stroke-width="3"/><path d="M50 4 L50 22 M92 28 L76 66 M8 28 L24 66 M50 96 L76 66 M50 96 L24 66 M92 72 L76 66 M8 72 L24 66" stroke="#fff" stroke-width="3"/><text x="50" y="58" font-size="22" font-weight="900" text-anchor="middle" fill="#fff" font-family="Arial">20</text></svg>`;
+const dieFace = n => dW(n);
+
+// ---------- hero art ----------
+const ART = {
+  sword: svg('0 0 100 100', `<path d="M50 6 L59 18 L59 60 L41 60 L41 18 Z"/><path class="n" d="M50 18 V56"/><rect x="26" y="59" width="48" height="8" rx="4"/><rect x="45" y="67" width="10" height="18" rx="2"/><circle cx="50" cy="90" r="6"/>`),
+  bigsword: svg('0 0 100 100', `<path d="M50 3 L64 16 L64 58 L36 58 L36 16 Z"/><path class="n" d="M50 14 V54 M44 22 V50 M56 22 V50"/><path d="M18 57 Q50 66 82 57 L82 66 Q50 74 18 66 Z"/><rect x="44" y="69" width="12" height="17" rx="2"/>${star(50, 91, 8, 4)}<path class="n" d="M20 20 l6 6 M80 20 l-6 6 M14 40 h7 M86 40 h-7"/>`),
+  axe: svg('0 0 100 100', `<g transform="rotate(25 50 50)"><rect x="45" y="8" width="10" height="88" rx="4"/><path d="M55 14 C80 6 94 22 92 46 C78 38 66 40 55 46 Z"/><path d="M45 14 C20 6 6 22 8 46 C22 38 34 40 45 46 Z"/><path class="n" d="M45 70 h10 M45 78 h10 M45 86 h10"/></g>`),
+  bow: svg('0 0 100 100', `<path class="n" d="M34 8 Q90 50 34 92" stroke-width="7"/><path class="n" d="M34 8 Q90 50 34 92" stroke="#fff" stroke-width="2"/><path class="n" d="M34 8 L34 92" stroke-width="2"/><path class="n" d="M14 50 H84"/><path d="M76 42 L90 50 L76 58 Z" class="k"/><path d="M14 50 L6 42 L20 42 L26 50 L20 58 L6 58 Z"/>`),
+  wand: svg('0 0 100 100', `<g transform="rotate(40 40 64)"><rect x="35" y="36" width="10" height="56" rx="4"/><rect x="35" y="80" width="10" height="12" rx="3" class="k"/></g>${star(66, 30, 22, 10)}<path class="n" d="M88 54 v10 M83 59 h10 M24 18 v10 M19 23 h10 M90 10 v8 M86 14 h8"/>`),
+  fireball: svg('0 0 100 100', `<path d="M70 12 C66 26 80 26 92 22 C86 34 92 40 96 46 C86 46 82 52 80 60 C70 86 40 92 24 80 C8 66 10 40 30 30 C44 22 52 26 58 24 C62 22 66 18 70 12 Z"/><circle cx="44" cy="58" r="17"/><path class="n" d="M44 50 C52 50 54 60 46 64 C40 66 36 60 40 56"/>`),
+  mega: svg('0 0 100 100', `<polygon points="60,4 22,56 46,56 34,96 80,40 54,40 70,4"/><path class="n" d="M12 20 l10 8 M88 64 l-10 -6 M14 80 l10 -4 M88 18 l-8 6"/>${star(20, 44, 6, 3)}${star(84, 84, 6, 3)}`),
+  dog: svg('0 0 100 100', `<ellipse cx="50" cy="54" rx="30" ry="28"/><path d="M24 34 C10 36 8 62 18 70 C26 62 26 48 28 40 Z" class="g"/><path d="M76 34 C90 36 92 62 82 70 C74 62 74 48 72 40 Z" class="g"/><ellipse cx="50" cy="68" rx="16" ry="12"/><ellipse cx="50" cy="62" rx="7" ry="5" class="k"/><circle cx="39" cy="48" r="4.5" class="k"/><circle cx="61" cy="48" r="4.5" class="k"/><path class="n" d="M50 67 V74 M42 74 Q50 80 58 74"/><path d="M47 77 Q50 90 53 77" />`),
+  clover: svg('0 0 100 100', `<path class="n" d="M50 52 Q56 80 72 94" stroke-width="5"/><circle cx="35" cy="35" r="16"/><circle cx="65" cy="35" r="16"/><circle cx="35" cy="62" r="16"/><circle cx="65" cy="62" r="16"/><circle cx="50" cy="49" r="7"/>`),
+  shield: svg('0 0 100 100', `<path d="M50 6 L86 20 V46 C86 70 70 86 50 95 C30 86 14 70 14 46 V20 Z"/><path d="M50 18 L74 28 V47 C74 64 63 76 50 83 C37 76 26 64 26 47 V28 Z" class="g"/>${star(50, 50, 16, 7)}`),
+  potion: svg('0 0 100 100', `<rect x="40" y="6" width="20" height="12" rx="3" class="g"/><path d="M42 18 H58 V34 C74 40 84 52 84 66 C84 84 70 94 50 94 C30 94 16 84 16 66 C16 52 26 40 42 34 Z"/><path class="n" d="M20 62 Q35 54 50 62 T80 62"/><path d="${HEART}" transform="translate(36 62) scale(1.15)" class="k"/><circle cx="30" cy="46" r="3" class="n"/>`),
+  blank: svg('0 0 100 100', `<path class="n" d="M20 80 L70 30 L80 40 L30 90 L16 94 Z M64 36 l10 10" stroke-dasharray="0"/><path class="n" d="M10 20 h20 M10 30 h30" stroke-dasharray="4 6"/>`),
+};
+
+// ---------- enemy art ----------
+const EART = {
+  rat: svg('0 0 100 100', `<path class="n" d="M84 64 Q100 84 78 90 Q66 92 70 84" stroke-width="4"/><ellipse cx="58" cy="62" rx="28" ry="18"/><path d="M36 50 L8 64 L36 76 Z"/><circle cx="34" cy="44" r="10" class="g"/><circle cx="24" cy="60" r="3" class="k"/><circle cx="9" cy="64" r="3" class="k"/><path class="n" d="M12 58 L2 52 M12 70 L2 76" stroke-width="2"/><path class="n" d="M44 78 v8 M70 78 v8"/>`),
+  bat: svg('0 0 100 100', `<path d="M50 40 C40 28 24 24 4 30 C12 38 12 46 10 54 C18 50 28 52 32 60 C38 54 44 56 50 64 C56 56 62 54 68 60 C72 52 82 50 90 54 C88 46 88 38 96 30 C76 24 60 28 50 40 Z" class="g"/><ellipse cx="50" cy="48" rx="11" ry="15"/><path d="M42 38 L40 26 L47 34 Z M58 38 L60 26 L53 34 Z"/><circle cx="45" cy="45" r="3" class="k"/><circle cx="55" cy="45" r="3" class="k"/><path d="M45 54 L47 59 L49 54 M51 54 L53 59 L55 54" class="n" stroke-width="2"/>`),
+  slime: svg('0 0 100 100', `<path d="M12 82 C12 52 30 24 50 24 C70 24 88 52 88 82 Q78 88 70 82 Q60 90 50 82 Q40 90 30 82 Q20 88 12 82 Z"/><ellipse cx="38" cy="56" rx="6" ry="9" class="k"/><ellipse cx="62" cy="56" rx="6" ry="9" class="k"/><path class="n" d="M40 70 Q50 78 60 70"/><path class="n" d="M28 44 Q32 34 40 32"/><circle cx="22" cy="20" r="4"/><circle cx="80" cy="16" r="3"/>`),
+  goblin: svg('0 0 100 100', `<path d="M28 46 L4 32 L26 64 Z M72 46 L96 32 L74 64 Z" class="g"/><ellipse cx="50" cy="54" rx="26" ry="28"/><path class="n" d="M34 40 L46 46 M66 40 L54 46" stroke-width="4"/><circle cx="40" cy="50" r="4" class="k"/><circle cx="60" cy="50" r="4" class="k"/><path d="M47 54 L50 64 L53 54" class="n"/><path d="M34 70 Q50 80 66 70 Q50 74 34 70 Z"/><path d="M40 72 l2 5 l2 -4 M56 72 l2 4 l2 -5" class="n" stroke-width="2"/>`),
+  spider: svg('0 0 100 100', `<path class="n" d="M50 2 V26" stroke-width="2"/><path class="n" d="M38 56 L18 40 L6 56 M38 62 L16 58 L6 74 M40 68 L22 76 L14 94 M42 72 L32 86 L30 98 M62 56 L82 40 L94 56 M62 62 L84 58 L94 74 M60 68 L78 76 L86 94 M58 72 L68 86 L70 98"/><ellipse cx="50" cy="64" rx="18" ry="20" class="g"/><circle cx="50" cy="38" r="13"/><circle cx="45" cy="35" r="3" class="k"/><circle cx="55" cy="35" r="3" class="k"/><circle cx="42" cy="42" r="2" class="k"/><circle cx="58" cy="42" r="2" class="k"/><path d="M46 49 L44 55 M54 49 L56 55" class="n"/>`),
+  skeleton: svg('0 0 100 100', `<path class="n" d="M14 70 L86 96 M86 70 L14 96" stroke-width="7"/><path class="n" d="M14 70 L86 96 M86 70 L14 96" stroke="#fff" stroke-width="2"/><path d="M24 46 C24 18 76 18 76 46 C76 58 70 62 68 68 L68 80 L32 80 L32 68 C30 62 24 58 24 46 Z"/><circle cx="39" cy="48" r="9" class="k"/><circle cx="61" cy="48" r="9" class="k"/><path d="M50 56 L45 64 L55 64 Z" class="k"/><path class="n" d="M32 70 H68 M41 70 V80 M50 70 V80 M59 70 V80" stroke-width="2"/>`),
+  mimic: svg('0 0 100 100', `<path d="M14 26 L22 6 L78 6 L86 26 Z" class="g"/><path d="M14 26 L86 26 L86 40 L14 40 Z"/><path d="M18 40 L24 50 L30 40 L36 50 L42 40 L48 50 L54 40 L60 50 L66 40 L72 50 L78 40 L82 40"/><path d="M50 56 Q46 74 60 76 Q70 74 62 60" class="g"/><rect x="12" y="58" width="76" height="34" rx="3"/><path d="M18 58 L24 48 L30 58 L36 48 L42 58 L48 48 L54 58 L60 48 L66 58 L72 48 L78 58 Z"/><rect x="44" y="70" width="12" height="14" rx="2" class="k"/><circle cx="36" cy="16" r="5" class="k"/><circle cx="64" cy="16" r="5" class="k"/><path class="n" d="M12 75 H88"/>`),
+  ghost: svg('0 0 100 100', `<path d="M24 88 V44 C24 18 76 18 76 44 V88 L67 80 L58 88 L50 80 L42 88 L33 80 Z"/><path d="M24 50 C14 46 8 38 10 30 M76 50 C86 46 92 38 90 30" class="n"/><ellipse cx="40" cy="44" rx="6" ry="9" class="k"/><ellipse cx="60" cy="44" rx="6" ry="9" class="k"/><ellipse cx="50" cy="64" rx="7" ry="9" class="k"/><path class="n" d="M8 14 Q14 8 20 14 M80 10 Q86 4 92 10" stroke-width="2"/>`),
+  orc: svg('0 0 100 100', `<path d="M20 40 L8 34 L18 58 Z M80 40 L92 34 L82 58 Z" class="g"/><rect x="20" y="20" width="60" height="64" rx="22"/><path d="M24 40 L76 40" stroke-width="7" class="n"/><circle cx="38" cy="49" r="4" class="k"/><circle cx="62" cy="49" r="4" class="k"/><ellipse cx="50" cy="58" rx="8" ry="5"/><path class="n" d="M32 72 Q50 64 68 72"/><path d="M34 72 L36 58 L42 69 Z M66 72 L64 58 L58 69 Z"/><path class="n" d="M40 22 L44 10 L50 20 L56 10 L60 22" stroke-width="3"/>`),
+  troll: svg('0 0 100 100', `<path d="M36 22 L30 4 L42 18 L50 2 L56 18 L68 4 L64 22 Z" class="g"/><ellipse cx="50" cy="56" rx="36" ry="34"/><circle cx="36" cy="40" r="5" class="k"/><circle cx="64" cy="40" r="5" class="k"/><path class="n" d="M28 32 L42 34 M72 32 L58 34" stroke-width="4"/><ellipse cx="50" cy="56" rx="11" ry="14" class="g"/><path d="M26 74 Q50 88 74 74 Q50 80 26 74 Z"/><path d="M44 77 L46 84 L49 78 Z"/><circle cx="74" cy="56" r="2.5" class="k"/><circle cx="28" cy="62" r="2" class="k"/><circle cx="68" cy="66" r="2" class="k"/>`),
+  golem: svg('0 0 100 100', `<rect x="34" y="6" width="32" height="24" rx="4" class="g"/><rect x="40" y="14" width="7" height="5" class="k"/><rect x="53" y="14" width="7" height="5" class="k"/><rect x="22" y="32" width="56" height="40" rx="6" class="g"/><rect x="4" y="34" width="16" height="44" rx="6"/><rect x="80" y="34" width="16" height="44" rx="6"/><rect x="28" y="74" width="18" height="22" rx="4"/><rect x="54" y="74" width="18" height="22" rx="4"/><path class="n" d="M40 40 L48 50 L44 60 M66 44 L60 52 M30 60 L36 66 M60 82 L64 88"/>`),
+  blank: svg('0 0 100 100', `<circle cx="50" cy="50" r="34" class="n" stroke-dasharray="6 7"/><text x="50" y="62" font-size="36" text-anchor="middle" font-family="Arial" font-weight="900" fill="#000" stroke="none">?</text>`),
+};
+
+const DRAGON = svg('0 0 220 180', `
+  <path d="M190 150 Q214 140 206 116 Q200 102 186 110 L196 98 L176 104 Q194 120 180 134 Q170 144 150 140 Z" class="g"/>
+  <path d="M70 92 L14 30 L24 70 L2 72 L22 92 L8 108 L56 118 Z" class="g"/>
+  <path d="M150 92 L206 30 L196 70 L218 72 L198 92 L212 108 L164 118 Z" class="g"/>
+  <path class="n" d="M64 98 L24 70 M64 104 L22 92 M156 98 L196 70 M156 104 L198 92"/>
+  <ellipse cx="110" cy="136" rx="52" ry="38"/>
+  <ellipse cx="110" cy="142" rx="28" ry="28"/>
+  <path class="n" d="M86 130 H134 M84 142 H136 M88 154 H132"/>
+  <ellipse cx="74" cy="168" rx="18" ry="9"/><ellipse cx="146" cy="168" rx="18" ry="9"/>
+  <path class="n" d="M64 172 v4 M74 173 v4 M84 172 v4 M136 172 v4 M146 173 v4 M156 172 v4"/>
+  <path d="M80 44 L64 8 L92 36 Z M140 44 L156 8 L128 36 Z" class="g"/>
+  <ellipse cx="110" cy="66" rx="44" ry="36"/>
+  <path d="M90 32 L94 14 L102 26 L110 10 L118 26 L126 14 L130 32 Z"/>
+  ${star(110, 24, 4, 2)}
+  <path class="n" d="M82 48 L102 54 M138 48 L118 54" stroke-width="5"/>
+  <circle cx="94" cy="62" r="9"/><circle cx="126" cy="62" r="9"/>
+  <circle cx="96" cy="63" r="4.5" class="k"/><circle cx="124" cy="63" r="4.5" class="k"/>
+  <ellipse cx="110" cy="84" rx="26" ry="15"/>
+  <ellipse cx="101" cy="78" rx="3" ry="4" class="k"/><ellipse cx="119" cy="78" rx="3" ry="4" class="k"/>
+  <path d="M88 88 Q110 100 132 88"/>
+  <path d="M94 91 L97 97 L100 93 M120 93 L123 97 L126 91" class="n" stroke-width="2.5"/>
+  <path class="n" d="M144 34 Q150 26 158 30 M150 22 Q156 14 164 18" stroke-width="2"/>
+`);
+
+// ---------- card data ----------
+const W = n => Array(n).fill(0).map(() => dW(5));
+const HERO = [
+  { name: 'SWORD', art: 'sword', roll: W(2), n: 6 },
+  { name: 'BIG SWORD', art: 'bigsword', roll: W(3), n: 4 },
+  { name: 'BATTLE AXE', art: 'axe', roll: W(4), n: 2, cols: 4 },
+  { name: 'BOW & ARROW', art: 'bow', roll: [dG(), dG()], n: 3 },
+  { name: 'MAGIC WAND', art: 'wand', roll: [dP()], n: 4 },
+  { name: 'FIREBALL', art: 'fireball', roll: [dP(), dW(5), dW(5)], n: 2 },
+  { name: 'MEGA STRIKE', art: 'mega', roll: W(6), n: 1, cols: 3 },
+  { name: 'DOGGO BUDDY', art: 'dog', bonus: true, eff: `<span class="plus">+</span>${dW(5)}`, note: 'Add 1 white die to any roll', n: 2 },
+  { name: 'LUCKY CLOVER', art: 'clover', bonus: true, eff: svg('0 0 100 100', `<path class="n" d="M80 50 A30 30 0 1 1 66 24" stroke-width="7"/><path class="k" d="M58 8 L82 22 L58 36 Z" stroke-width="2"/>`) + dW(1), note: 'Roll any dice again', n: 2 },
+  { name: 'SHIELD', art: 'shield', bonus: true, eff: brokenHeart() + svg('0 0 100 100', `<path class="n" d="M15 15 L85 85 M85 15 L15 85" stroke-width="12"/>`), note: 'Block one monster hit', n: 2 },
+  { name: 'POTION', art: 'potion', bonus: true, eff: `<span class="plus">+</span>${heart()}${heart()}${heart()}`, note: 'Get 3 hearts back', n: 2 },
+  { name: '', art: 'blank', roll: [], n: 2, blank: true },
+];
+// stars = rank, power = number to beat, hits = hearts lost on a miss
+const ENEMY = [
+  { name: 'RAT', art: 'rat', rank: 1, power: 6, hits: 1 },
+  { name: 'BAT', art: 'bat', rank: 1, power: 7, hits: 1 },
+  { name: 'SLIME', art: 'slime', rank: 1, power: 8, hits: 1 },
+  { name: 'GOBLIN', art: 'goblin', rank: 1, power: 9, hits: 1 },
+  { name: 'SPIDER', art: 'spider', rank: 2, power: 11, hits: 1 },
+  { name: 'SKELETON', art: 'skeleton', rank: 2, power: 12, hits: 2 },
+  { name: 'MIMIC', art: 'mimic', rank: 2, power: 13, hits: 1, note: [dG(), 'Beat it: roll loot TWICE'] },
+  { name: 'GHOST', art: 'ghost', rank: 2, power: 13, hits: 1, note: [dP(), 'Magic does DOUBLE (×2)'] },
+  { name: 'ORC', art: 'orc', rank: 3, power: 15, hits: 2 },
+  { name: 'TROLL', art: 'troll', rank: 3, power: 17, hits: 2, note: [ART.dog, 'So stinky! Doggo won\'t help'] },
+  { name: 'ROCK GOLEM', art: 'golem', rank: 3, power: 19, hits: 2, note: [dP(), 'Rock skin: magic does HALF'] },
+  { name: '', art: 'blank', rank: 0, power: '', hits: 0, n: 2, blank: true },
+];
+
+const BADGE = `<svg viewBox="0 0 100 100"><path d="M50 4 L92 18 V48 C92 74 72 90 50 97 C28 90 8 74 8 48 V18 Z" fill="#fff" stroke="#000" stroke-width="7" stroke-linejoin="round"/></svg>`;
+
+const heroCard = c => `
+  <div class="card hero"><div class="card-in">
+    <div class="hdr">${c.blank ? '&nbsp;' : c.name}</div>
+    ${c.bonus ? `<div class="tag" title="free">${svg('0 0 40 40', star(20, 20, 18, 8))}</div>` : ''}
+    <div class="art">${ART[c.art]}</div>
+    ${c.note ? `<div class="note">★ ${c.note}</div>` : ''}
+    <div class="ftr ${c.cols ? 'cols' : ''}" ${c.cols ? `style="grid-template-columns: repeat(${c.cols}, auto)"` : ''}>${c.bonus ? c.eff : c.roll.join(c.roll.length > 3 ? '' : '<span class="plus">+</span>')}</div>
+  </div></div>`;
+
+const enemyCard = e => `
+  <div class="card enemy"><div class="card-in">
+    <div class="hdr"><span>${e.blank ? '&nbsp;' : e.name}</span><span class="ranks">${Array(e.rank).fill(skullTiny()).join('')}</span></div>
+    <div class="art">${EART[e.art]}</div>
+    ${e.note ? `<div class="note">${e.note[0]}<span>${e.note[1]}</span></div>` : ''}
+    <div class="ftr">
+      <div class="badge">${BADGE}<b>${e.power}</b></div>
+      <div class="hits">${Array(e.hits).fill(brokenHeart()).join('')}</div>
+    </div>
+  </div></div>`;
+
+// ---------- pages ----------
+const cards = [];
+HERO.forEach(c => { for (let i = 0; i < c.n; i++) cards.push(heroCard(c)); });
+ENEMY.forEach(e => { for (let i = 0; i < (e.n || 1); i++) cards.push(enemyCard(e)); });
+
+const rulesPage = `
+<div class="page">
+  <h1>⚔ DICE DUNGEON ⚔</h1>
+  <div class="sub">A team-up dice adventure for 1–2 heroes. Beat the monsters, then beat the Dragon King!</div>
+
+  <div class="legend">
+    <div>${dW(5)}6 White dice<br>Hero attacks</div>
+    <div>${dG(5)}2 Green dice<br>Bow, loot &amp; boss power</div>
+    <div>${dP()}Purple d20<br>Magic</div>
+    <div>${dR()}Red d20<br>Dragon only</div>
+  </div>
+
+  <h2>Team Hearts — put a coin or die here</h2>
+  <div class="hearts">${Array.from({ length: 10 }, (_, i) => `<div>${heart()}<b>${i + 1}</b></div>`).join('')}</div>
+
+  <h2>Each Turn</h2>
+  <div class="strip">
+    <div><span class="num">1</span>${svg('0 0 100 60', `<rect x="30" y="4" width="40" height="52" rx="5" class="k"/>${skullTiny().replace('<svg', '<svg x="38" y="18" width="24" height="24"').replace('fill="#fff"', 'fill="#fff" stroke="#fff"')}`)}Flip a monster</div>
+    <div><span class="num">2</span>${svg('0 0 100 60', `<rect x="14" y="8" width="34" height="46" rx="5" transform="rotate(-10 31 31)"/><rect x="52" y="8" width="34" height="46" rx="5" transform="rotate(10 69 31)"/>`)}Each hero plays<br>1 attack card</div>
+    <div><span class="num">3</span><div style="display:flex;justify-content:center;gap:4px;height:50px;align-items:center">${dW(4).replace('<svg', '<svg style="height:38px;width:auto"')}<b style="font-size:22px">+</b>${dW(5).replace('<svg', '<svg style="height:38px;width:auto"')}</div>Roll &amp; add up</div>
+    <div><span class="num">4</span><div style="display:flex;justify-content:center;gap:4px;height:50px;align-items:center;font-size:20px;font-weight:900">≥ ${BADGE.replace('<svg', '<svg style="height:38px;width:auto"')}</div>Same or more = WIN!<br>Less = ouch ${brokenHeart().replace('<svg', '<svg style="height:14px;vertical-align:middle"')}</div>
+  </div>
+
+  <div class="twocol" style="margin-top:6px">
+    <div>
+      <h2>Loot — roll 1 green die after a win</h2>
+      <table class="chart">
+        <tr><td>${dG(1)} ${dG(2)}</td><td>${heart()} Get 1 heart back</td></tr>
+        <tr><td>${dG(3)} ${dG(4)}</td><td>Draw 1 card</td></tr>
+        <tr><td>${dG(5)} ${dG(6)}</td><td>Draw 2 cards</td></tr>
+      </table>
+    </div>
+    <div>
+      <h2>Card symbols</h2>
+      <table class="chart">
+        <tr><td>${BADGE}</td><td>Roll this much or more to win</td></tr>
+        <tr><td>${brokenHeart()}</td><td>Hearts you lose if you miss</td></tr>
+        <tr><td>${svg('0 0 40 40', star(20, 20, 18, 8))}</td><td>FREE card — play any time, extra</td></tr>
+        <tr><td>${skullTiny()}${skullTiny()}${skullTiny()}</td><td>How tough (1 easy – 3 hard)</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="rules" style="margin-top:6px">
+    <section><h2>Setup</h2>
+    <ol>
+      <li>Cut out the cards. Tip: slip each one into a Magic card sleeve in front of an old land — same size, sturdy, and shuffles great!</li>
+      <li>Shuffle the <b>hero cards</b> (thin border) into one shared draw pile. Each hero draws <b>3</b>.</li>
+      <li>Build the dungeon: lay monster cards (thick border) face down in a line. <b>Short game:</b> 2 one-skull, 2 two-skull, 1 three-skull. <b>Long game:</b> all of them, easiest first. The <b>Dragon King</b> waits at the end.</li>
+      <li>Put a marker on <b>10</b> hearts. The team shares them.</li>
+    </ol></section>
+    <section><h2>Fighting a monster</h2>
+    <p>Flip the next monster. Each hero picks <b>one attack card</b> (the ones with dice on the bottom) and rolls those dice. <b>Add everything together</b> — you're a team!</p>
+    <p><b>Total ≥ the shield number:</b> monster beaten! Roll for loot, then move on.<br>
+    <b>Total is less:</b> the monster hits back — lose the hearts shown. It stays; try again next turn.</p>
+    <p>Discard played cards and draw back up to 3. Shuffle the discards when the pile runs out.</p></section>
+    <section><h2>★ Free cards</h2>
+    <p>Doggo, Clover, Shield and Potion don't count as your attack. Play them whenever they help — even on the Dragon's turn.</p></section>
+    <section><h2>Out of hearts?</h2>
+    <p>Nobody loses! The heroes rest at the <b>campfire</b>: back to 10 hearts and keep going. (Want it harder? Out of hearts = start the dungeon over.)</p></section>
+    <section><h2>Playing solo</h2>
+    <p>Hold 4 cards and play 2 attack cards each turn.</p></section>
+  </div>
+</div>`;
+
+const BOSS_ROWS = [
+  ['1 – 5', 'Snore… zzz. Nothing happens!'],
+  ['6 – 10', `Claw swipe: lose ${brokenHeart()} 1`],
+  ['11 – 14', `Tail smash: lose ${brokenHeart()}${brokenHeart()} 2`],
+  ['15 – 17', `Fire breath: lose ${brokenHeart()}${brokenHeart()} 2 &nbsp;(a Shield blocks ALL of it)`],
+  ['18 – 19', 'Snack time: Dragon heals 3 boxes'],
+  ['20', 'ROAR!! Every hero discards 1 card'],
+];
+const POWER_ROWS = [
+  [`${dG(1)}${dG(2)}${dG(3)}`, '× 1 — normal'],
+  [`${dG(4)}${dG(5)}`, '× 2 — double it!'],
+  [`${dG(6)}`, '× 3 — TRIPLE it!!'],
+];
+
+const bossPage = `
+<div class="page"><div class="boss-wrap">
+  <div class="boss-title">★ THE DRAGON KING ★</div>
+  <div class="boss-art">${DRAGON}</div>
+  <h2 style="margin-top:2px">Dragon Health — cross off a box for every point of damage</h2>
+  <div class="hp">${Array.from({ length: 60 }, (_, i) => `<div class="${i >= 30 ? '' : 'half'}">${(i + 1) % 10 === 0 ? i + 1 : ''}</div>`).join('')}</div>
+  <div class="sub" style="text-align:left;margin-top:3px">Shaded half = the Dragon is <b>ANGRY</b>: once the first 30 boxes are gone, roll the red die twice on its turn and use the higher one.</div>
+
+  <div class="twocol">
+    <div>
+      <h2>Heroes' turn</h2>
+      <div style="font-size:12px;line-height:1.35">
+        Each hero plays 1 attack card and rolls. Add it all up and cross off that many boxes. Damage <b>stays</b> — keep chipping away!<br>
+        <b>Hero multipliers:</b><br>
+        ${dP().replace('<svg', '<svg style="height:20px;vertical-align:middle"')} rolls a <b>20</b> → that card's damage <b>× 2</b><br>
+        ${dW(3).replace('<svg', '<svg style="height:18px;width:18px;vertical-align:middle"')}${dW(3).replace('<svg', '<svg style="height:18px;width:18px;vertical-align:middle"')}${dW(3).replace('<svg', '<svg style="height:18px;width:18px;vertical-align:middle"')} three white dice match → <b>× 2</b><br>
+        All 60 boxes gone → <b>YOU WIN!</b>
+      </div>
+    </div>
+    <div>
+      <h2>Dragon's power — roll 1 green</h2>
+      <table class="chart">${POWER_ROWS.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('')}</table>
+      <div style="font-size:11px;margin-top:3px">Multiplies hearts lost and boxes healed.</div>
+    </div>
+  </div>
+
+  <h2>Dragon's turn — roll the ${dR().replace('<svg', '<svg style="height:20px;vertical-align:middle"')} red d20 and a ${dG(5).replace('<svg', '<svg style="height:18px;vertical-align:middle"')} green die</h2>
+  <table class="chart">${BOSS_ROWS.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('')}</table>
+</div></div>`;
+
+let html = rulesPage;
+for (let i = 0; i < cards.length; i += 9) html += `<div class="page"><div class="sheet">${cards.slice(i, i + 9).join('')}</div></div>`;
+html += bossPage;
+document.getElementById('root').innerHTML = html;
+</script>
+</body>
+</html>

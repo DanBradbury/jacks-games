@@ -8,7 +8,8 @@
     "build": "tsc -p . && vite build",
     "preview": "vite preview --host",
     "typecheck": "tsc -p .",
-    "package": "npm run build && node ../../scripts/package-game.mjs ."
+    "package": "npm run build && node ../../scripts/package-game.mjs .",
+    "deploy": "npm run build && npx wrangler deploy"
   },
   "dependencies": {
     "@jack-games/kit": "*"

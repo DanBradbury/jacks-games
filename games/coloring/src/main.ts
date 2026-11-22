@@ -524,6 +524,15 @@ const pageDone = (p: Level) => p.regions.filter((r) => progress.pages[p.id!]?.[r
 
 // ---- DOM UI -------------------------------------------------------------------
 
+function pickColor(i: number) {
+  const c = state.palette[i];
+  state.color = c;
+  sfx.pop([0, 2, 4, 7, 9, 12][i % 6]);
+  renderPalette();
+  renderTools();
+  return c;
+}
+
 function renderPalette() {
   const suggested = state.def.regions[state.regionIdx]?.color;
   ui.palette.replaceChildren(
@@ -534,13 +543,10 @@ function renderPalette() {
       b.setAttribute('aria-label', `Color ${i + 1}`);
       if (c === state.color) b.classList.add('selected');
       else if (!state.color && c === suggested) b.classList.add('hint');
-      b.onclick = () => {
+      // Select on press, not click, so a finger that slides off still counts.
+      b.onpointerdown = () => {
         sfx.unlock();
-        if (state.phase !== 'color') return;
-        state.color = c;
-        sfx.pop([0, 2, 4, 7, 9, 12][i % 6]);
-        renderPalette();
-        renderTools();
+        if (state.phase === 'color') pickColor(i);
       };
       return b;
     }),
@@ -657,16 +663,11 @@ canvas.addEventListener('pointerdown', (e) => {
     }
     pen.x = pointer.x;
     pen.y = pointer.y;
-    if (!state.color) {
-      sfx.boop();
-      ui.palette.classList.remove('nudge');
-      void ui.palette.offsetWidth;
-      ui.palette.classList.add('nudge');
-      return;
-    }
+    // No color picked yet: grab the suggested one and start painting right away.
+    const color = state.color ?? pickColor(state.palette.indexOf(state.def.regions[state.regionIdx].color));
     // Keep the brush the same size on screen however far we're zoomed in.
     const r = (BRUSH[state.tool] * state.prep.w) / 400 / cam.tz;
-    state.current = { region: state.regionIdx, color: state.color, tool: state.tool, r, pts: [] };
+    state.current = { region: state.regionIdx, color, tool: state.tool, r, pts: [] };
     addPaintPoint();
   }
 });

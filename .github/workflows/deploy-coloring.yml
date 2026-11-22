@@ -1,0 +1,20 @@
+# Deploys only when this game (or code it bundles) changes on main.
+name: Deploy coloring
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - games/coloring/**
+      - packages/kit/**
+      - tsconfig.base.json
+      - .github/workflows/deploy-coloring.yml
+      - .github/workflows/deploy-game.yml
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy-game.yml
+    with:
+      game: coloring
+    secrets: inherit

@@ -1,0 +1,20 @@
+# Deploys only when this game (or code it bundles) changes on main.
+name: Deploy dice-dungeon
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - games/dice-dungeon/**
+      - packages/kit/**
+      - tsconfig.base.json
+      - .github/workflows/deploy-dice-dungeon.yml
+      - .github/workflows/deploy-game.yml
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy-game.yml
+    with:
+      game: dice-dungeon
+    secrets: inherit

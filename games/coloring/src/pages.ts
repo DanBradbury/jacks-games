@@ -214,6 +214,71 @@ const harvestOrder = [
   'sun', 'cloud', 'hills', 'ground', 'sky',
 ];
 
+const cottageParts: Part[] = [
+  { id: 'sky', d: rect(0, 0, 800, 600), color: C.sky },
+  { id: 'snow', d: 'M0 380 Q160 330 372 385 T800 364 V600 H0 Z', color: C.white },
+  { id: 'gumdrop-path', d: [ellipse(403, 510, 31, 13), ellipse(364, 548, 40, 17), ellipse(302, 588, 51, 19)].join(' '), color: C.pink },
+  { id: 'sticks', d: rect(80, 286, 20, 157) + rect(701, 242, 20, 176), color: C.wood },
+  { id: 'lollipop-left', d: circle(90, 257, 58), color: C.red, detail: 'M90 257 C70 229 48 273 84 285 C135 303 148 222 89 211' },
+  { id: 'lollipop-right', d: circle(711, 213, 54), color: C.green, detail: 'M711 213 C687 192 678 231 709 238 C753 244 758 176 709 171' },
+  { id: 'chimney', d: rect(492, 98, 64, 127), color: C.brown, detail: 'M492 131 H556 M522 99 V131' },
+  { id: 'chimney-icing', d: rrect(481, 79, 86, 32, 12), color: C.white },
+  { id: 'cookie', d: 'M185 268 L400 108 L615 268 V477 H185 Z', color: C.tan },
+  { id: 'roof', d: 'M148 277 L400 75 L652 277 L618 304 L400 139 L182 304 Z', color: C.brown },
+  { id: 'icing', d: 'M148 277 L400 75 L652 277 Q647 303 622 281 L584 250 Q580 279 557 249 L542 219 L488 176 Q480 203 459 174 L446 145 L400 109 L336 160 Q329 193 312 180 L301 187 L223 250 Q211 286 193 271 L164 294 Q146 304 148 277 Z', color: C.white },
+  { id: 'door', d: 'M350 477 V375 A50 50 0 0 1 450 375 V477 Z', color: C.red, detail: 'M427 409 V418' },
+  { id: 'windows', d: rrect(212, 333, 94, 86, 16) + rrect(494, 333, 94, 86, 16), color: C.yellow, detail: 'M259 333 V419 M212 376 H306 M541 333 V419 M494 376 H588' },
+  { id: 'peppermint', d: circle(400, 230, 41), color: C.pink, detail: 'M400 189 Q376 212 400 230 Q424 247 400 271 M359 230 Q382 253 400 230 Q420 208 441 230' },
+  { id: 'gumdrops', d: [217, 282, 489, 554].map(x => `M${x} 473 q0 -47 21 -47 t21 47 Z`).join(' '), color: C.green },
+];
+
+const hearthParts: Part[] = [
+  { id: 'wall', d: rect(0, 0, 800, 600), color: C.cream },
+  { id: 'floor', d: rect(0, 492, 800, 108), color: C.wood, detail: 'M0 555 H800 M140 492 V555 M655 555 V600' },
+  { id: 'bricks', d: rect(91, 257, 618, 244), color: C.tan, detail: 'M91 354 H709 M91 430 H709 M166 354 V430 M631 430 V501' },
+  { id: 'firebox', d: 'M242 500 V409 C242 280 558 280 558 409 V500 Z', color: C.navy },
+  { id: 'flame', d: 'M331 468 Q294 426 341 377 Q335 416 362 416 Q391 382 393 340 Q453 377 433 420 Q459 409 474 383 Q500 442 459 468 Z', color: C.orange },
+  { id: 'ember', d: 'M373 465 Q347 439 381 410 Q379 432 401 425 Q415 409 415 393 Q454 442 421 465 Z', color: C.yellow },
+  { id: 'log', d: rrect(294, 459, 208, 33, 15), color: C.brown, detail: 'M320 473 Q366 464 392 475 M427 480 L470 475' },
+  { id: 'ledge', d: rrect(64, 217, 672, 50, 12), color: C.wood },
+  { id: 'wreath', d: 'M392 199 A85 85 0 1 1 408 199 L404 159 A44 44 0 1 0 396 159 Z', color: C.forest },
+  { id: 'berries', d: [circle(343, 89, 11), circle(460, 98, 12), circle(378, 53, 10)].join(' '), color: C.red },
+  { id: 'bow', d: 'M400 177 Q334 121 344 194 Q359 211 400 177 Q447 213 457 193 Q467 123 400 177 Z', color: C.red },
+  { id: 'knot', d: ellipse(400, 177, 17, 19), color: C.gold },
+  { id: 'candles', d: rrect(146, 140, 44, 76, 5) + rrect(610, 140, 44, 76, 5), color: C.mint },
+  { id: 'candlelight', d: [168, 632].map(x => `M${x} 91 q-34 44 0 49 q30 -3 0 -49 Z`).join(' '), color: C.yellow },
+  ...[154, 602].flatMap((x, i) => [
+    { id: `stocking-${i}`, d: tf('M0 0 L69 0 L69 73 Q69 102 43 111 L-8 131 C-60 144 -71 89 -34 75 L0 62 Z', x, 271, 1, 1), color: i ? C.green : C.red },
+    { id: `cuff-${i}`, d: rrect(x - 9, 242, 87, 40, 10), color: C.white },
+  ]),
+  { id: 'rug', d: ellipse(400, 553, 207, 32), color: C.green, detail: 'M254 553 Q400 582 546 553' },
+];
+
+const expressParts: Part[] = [
+  { id: 'sky', d: rect(0, 0, 800, 600), color: C.navy },
+  { id: 'moon', d: circle(672, 93, 52), color: C.gold },
+  { id: 'stars', d: [[84,74],[222,130],[359,58],[524,116],[743,180]].map(([x,y]) => tf('M0 -18 L6 -5 L18 0 L6 5 L0 18 L-6 5 L-18 0 L-6 -5 Z',x,y,1,1)).join(' '), color: C.yellow },
+  { id: 'hills', d: 'M0 314 Q154 190 341 282 T800 248 V600 H0 Z', color: C.sky },
+  { id: 'bank', d: 'M0 399 Q162 319 368 379 T800 355 V600 H0 Z', color: C.white },
+  { id: 'ties', d: [60, 172, 284, 396, 508, 620, 732].map(x => rect(x, 498, 37, 32)).join(' '), color: C.wood },
+  { id: 'rail', d: rect(0, 484, 800, 17), color: C.black },
+  { id: 'coupling', d: rect(267, 404, 85, 17), color: C.black },
+  { id: 'parcel', d: rrect(54, 300, 120, 89, 6), color: C.red },
+  { id: 'ribbon', d: rect(100, 300, 28, 89), color: C.gold },
+  { id: 'tree', d: 'M220 202 L257 265 H243 L275 313 H256 L290 376 H150 L185 313 H166 L199 265 H184 Z', color: C.forest, detail: 'M193 276 Q210 289 246 285 M176 326 Q212 345 266 338' },
+  { id: 'wagon', d: rrect(28, 371, 266, 67, 12), color: C.blue, detail: 'M44 394 H278' },
+  { id: 'steam', d: 'M630 212 C587 217 594 191 557 192 C500 202 479 169 506 153 C528 133 551 146 558 161 C583 151 599 166 601 180 Q640 179 630 212 Z', color: C.white },
+  { id: 'stack', d: 'M597 231 H667 L653 266 V322 H612 V266 Z', color: C.black },
+  { id: 'boiler', d: rrect(419, 307, 278, 106, 37), color: C.green, detail: 'M543 310 V410 M572 310 V410' },
+  { id: 'cab', d: rrect(323, 246, 153, 181, 9), color: C.red },
+  { id: 'roof', d: rrect(305, 223, 190, 35, 12), color: C.gold },
+  { id: 'window', d: rrect(350, 274, 98, 75, 13), color: C.sky, detail: 'M399 274 V349' },
+  { id: 'plow', d: 'M673 381 L764 461 H666 Z', color: C.red, detail: 'M695 414 L729 451' },
+  { id: 'base', d: rrect(317, 398, 379, 41, 8), color: C.brown },
+  { id: 'wheels', d: [84,236,383,505,633].map(x => circle(x,447,36)).join(' '), color: C.black },
+  { id: 'hubs', d: [84,236,383,505,633].map(x => circle(x,447,16)).join(' '), color: C.gold },
+];
+
 export const PAGES: Level[] = [
   page(
     'santa-workshop',
@@ -235,4 +300,12 @@ export const PAGES: Level[] = [
     [C.red, C.orange, C.yellow, C.gold, C.brown, C.wood, C.tan, C.green, C.forest, C.sky, C.white, C.black, C.purple, C.pink, C.peach, C.cream],
     'crayon',
   ),
+  ...([
+    ['gingerbread-cottage', 'Gingerbread Cottage', cottageParts, 'marker'],
+    ['christmas-hearth', 'Christmas Stockings', hearthParts, 'crayon'],
+    ['christmas-express', 'Christmas Express', expressParts, 'paintstick'],
+  ] as const).map(([id, name, parts, tool]) => page(
+    id, name, 800, 600, parts, parts.map(part => part.id).reverse(),
+    [...new Set(parts.map(part => part.color))], tool,
+  )),
 ];

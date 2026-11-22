@@ -650,6 +650,11 @@ canvas.addEventListener('pointerdown', (e) => {
   state.idle = 0;
 
   if (state.phase === 'color') {
+    // Section is colored enough: any tap on the picture counts as "done".
+    if (state.ready) {
+      completeRegion();
+      return;
+    }
     pen.x = pointer.x;
     pen.y = pointer.y;
     if (!state.color) {

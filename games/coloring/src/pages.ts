@@ -279,6 +279,70 @@ const expressParts: Part[] = [
   { id: 'hubs', d: [84,236,383,505,633].map(x => circle(x,447,16)).join(' '), color: C.gold },
 ];
 
+// Counting block buddies: buddy k is k cubes (each its own region, so coloring
+// it is counting it) with a face, plus k stars in the sky to match.
+const BUDDY_ROWS = [[1], [2], [2, 1], [2, 2], [3, 2], [3, 2, 1], [4, 3], [3, 3, 2], [3, 3, 3], [4, 3, 2, 1]];
+const BUDDY_COLORS: [string, string][] = [
+  [C.blue, C.blue], [C.green, C.mint], [C.pink, C.purple], [C.orange, C.yellow], [C.purple, C.sky],
+  [C.mint, C.forest], [C.red, C.orange], [C.sky, C.blue], [C.yellow, C.green], [C.tan, C.brown],
+];
+const STAR = 'M0 -20 L6 -7 L20 -6 L9 3 L13 18 L0 10 L-13 18 L-9 3 L-20 -6 L-6 -7 Z';
+const TOOLS: ColorTool[] = ['marker', 'crayon', 'paintstick'];
+const PAGE_PALETTE = [C.red, C.orange, C.yellow, C.gold, C.green, C.mint, C.forest, C.sky, C.blue, C.navy, C.purple, C.pink, C.tan, C.brown, C.white, C.black];
+
+function buddy(k: number): Level {
+  const rows = BUDDY_ROWS[k - 1];
+  const [main, alt] = BUDDY_COLORS[k - 1];
+  const S = n(Math.min(160, 360 / rows.length, 520 / Math.max(...rows)));
+  const base = 472;
+  const cubes: Part[] = [];
+  rows.forEach((count, r) => {
+    for (let i = 0; i < count; i++) {
+      const x = n(400 - (count * S) / 2 + i * S);
+      const y = n(base - (r + 1) * S);
+      cubes.push({ id: `cube-${cubes.length + 1}`, d: rrect(x, y, S, S, 10), color: (r + i) % 2 ? alt : main });
+    }
+  });
+  const w = rows[0] * S;
+  const left = 400 - w / 2;
+  const top = base - rows.length * S;
+  // Face sits in the middle of the body; for one row it rides a little high.
+  const fy = n(rows.length === 1 ? top + S * 0.42 : (top + base) / 2);
+  const er = n(Math.max(14, Math.min(26, S * 0.17)));
+  const ex = n(Math.max(er + 6, S * 0.24));
+  const my = n(fy + er + 12);
+  const mw = n(er * 1.2);
+  const wave = k % 2 === 1;
+  const arm = (side: number) => {
+    const x = side < 0 ? left : left + w;
+    const y = n(base - S * 0.55);
+    return wave
+      ? `M${x} ${y} Q${x + side * 50} ${y - 10} ${x + side * 62} ${y - 70} L${x + side * 82} ${y - 62} Q${x + side * 72} ${y + 18} ${x} ${y + 26} Z`
+      : `M${x} ${y} Q${x + side * 60} ${y + 4} ${x + side * 66} ${y + 56} L${x + side * 46} ${y + 60} Q${x + side * 42} ${y + 30} ${x} ${y + 26} Z`;
+  };
+  const footX = Math.min(w / 2 - 34, 90);
+  const stars = Array.from({ length: k }, (_, i) => tf(STAR, n(400 + (i - (k - 1) / 2) * 68), 58, 1.1, 1)).join(' ');
+  const parts: Part[] = [
+    { id: 'sky', d: rect(0, 0, 800, 600), color: C.sky },
+    { id: 'cloud', d: 'M60 180 Q48 150 84 144 Q96 112 132 122 Q160 112 168 142 Q196 150 184 176 Q180 186 164 186 L72 186 Q62 186 60 180 Z', color: C.white },
+    { id: 'stars', d: stars, color: C.yellow },
+    { id: 'ground', d: 'M0 452 Q200 420 400 448 T800 440 V600 H0 Z', color: C.green, detail: 'M90 540 l8 -16 l8 16 M640 560 l8 -16 l8 16 M700 500 l8 -16 l8 16' },
+    { id: 'arms', d: `${arm(-1)} ${arm(1)}`, color: main },
+    { id: 'feet', d: `${ellipse(n(400 - footX), base + 14, 32, 18)} ${ellipse(n(400 + footX), base + 14, 32, 18)}`, color: C.black },
+    ...cubes,
+    { id: 'cheeks', d: `${circle(n(400 - ex - er * 1.2), my - 4, n(er * 0.55))} ${circle(n(400 + ex + er * 1.2), my - 4, n(er * 0.55))}`, color: C.pink },
+    {
+      id: 'eyes',
+      d: `${circle(400 - ex, fy, er)} ${circle(400 + ex, fy, er)}`,
+      color: C.white,
+      detail: `M${400 - ex} ${n(fy - er * 0.25)} V${n(fy + er * 0.3)} M${400 + ex} ${n(fy - er * 0.25)} V${n(fy + er * 0.3)}`,
+    },
+    { id: 'mouth', d: `M${n(400 - mw)} ${my} Q400 ${n(my + mw * 1.4)} ${n(400 + mw)} ${my} Z`, color: C.red },
+  ];
+  const order = [...cubes.map((c) => c.id), 'eyes', 'mouth', 'cheeks', 'arms', 'feet', 'stars', 'cloud', 'ground', 'sky'];
+  return page(`block-buddy-${k}`, `Block Buddy ${k}`, 800, 600, parts, order, PAGE_PALETTE, TOOLS[(k - 1) % 3]);
+}
+
 export const PAGES: Level[] = [
   page(
     'santa-workshop',
@@ -308,4 +372,5 @@ export const PAGES: Level[] = [
     id, name, 800, 600, parts, parts.map(part => part.id).reverse(),
     [...new Set(parts.map(part => part.color))], tool,
   )),
+  ...Array.from({ length: 10 }, (_, i) => buddy(i + 1)),
 ];

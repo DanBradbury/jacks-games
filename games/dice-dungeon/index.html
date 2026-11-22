@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Dice Dungeon</title>
+    <!-- YouTube Playables SDK: must load before any game code. -->
+    <script src="https://www.youtube.com/game_api/v1"></script>
+  </head>
+  <body>
+    <div id="app">
+      <div id="top">
+        <div id="path"></div>
+        <div id="hearts"></div>
+      </div>
+      <div id="stage">
+        <div id="foe"></div>
+        <div id="tray"></div>
+        <div id="effect"></div>
+      </div>
+      <div id="controls">
+        <button id="btn-roll" class="roll-btn" aria-label="Roll"></button>
+      </div>
+      <div id="hand"></div>
+
+      <div id="title" class="overlay"></div>
+      <div id="camp" class="overlay hidden"></div>
+      <div id="win" class="overlay hidden"></div>
+    </div>
+    <canvas id="fx"></canvas>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

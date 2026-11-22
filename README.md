@@ -18,6 +18,7 @@ packages/kit/        shared code for all games
   src/audio.ts       synthesized sound effects (no audio files)
   src/fx.ts          particle effects (sparkles, confetti)
 games/coloring/      "Doodle & Color" – trace a picture, then color it in
+games/dice-dungeon/  "Dice Dungeon" – color browser version of printables/dice-dungeon
 scripts/
   package-game.mjs   zips a game's dist/ for upload and checks Playables rules
 ```
@@ -27,6 +28,7 @@ scripts/
 ```sh
 npm install
 npm run dev:coloring                      # dev server (also reachable from a phone on your LAN)
+npm run dev:dice-dungeon
 npm run package -w @jack-games/coloring   # typecheck + build + zip → games/coloring/release/
 ```
 

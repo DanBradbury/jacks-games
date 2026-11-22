@@ -1,0 +1,8 @@
+{
+  // Static-assets-only Worker serving the Vite build. Paths are relative to this file.
+  "name": "dice-dungeon",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist"
+  }
+}

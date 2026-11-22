@@ -1,5 +1,6 @@
 {
   "name": "night-shift-hallway",
+  "account_id": "9f04d330b9fb1e2b99bcb02a5f46fb03",
   "compatibility_date": "2026-11-01",
   "assets": { "directory": "./dist" }
 }

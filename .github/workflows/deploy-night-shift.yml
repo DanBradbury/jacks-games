@@ -1,0 +1,20 @@
+# Deploys only when this game (or code it bundles) changes on main.
+name: Deploy night-shift
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - games/night-shift/**
+      - packages/kit/**
+      - tsconfig.base.json
+      - .github/workflows/deploy-night-shift.yml
+      - .github/workflows/deploy-game.yml
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy-game.yml
+    with:
+      game: night-shift
+    secrets: inherit

@@ -42,6 +42,8 @@ export interface Prepared {
   linePaths: Path2D[];
   regions: RegionShape[];
   samples: RegionSamples[];
+  /** Ready-made outline image (pictures from the device) instead of stroked paths. */
+  ink?: CanvasImageSource;
 }
 
 interface Box {
@@ -142,6 +144,8 @@ function sampleRegions(level: Level, boxes: Box[], zs: number[], w: number, h: n
 export const dims = (level: Level) => ({ w: level.w ?? ART, h: level.h ?? ART });
 
 const cache = new Map<Level, Prepared>();
+/** Use already-prepared geometry for a level built at runtime. */
+export const registerPrepared = (level: Level, p: Prepared) => cache.set(level, p);
 export function prepare(level: Level): Prepared {
   let p = cache.get(level);
   if (p) return p;
@@ -197,6 +201,10 @@ export function strokeLines(ctx: CanvasRenderingContext2D, paths: Path2D[]) {
 
 /** Outlines for a layered page: each region's edge, hidden where covered. */
 export function strokePageLines(ctx: CanvasRenderingContext2D, p: Prepared) {
+  if (p.ink) {
+    ctx.drawImage(p.ink, 0, 0, p.w, p.h);
+    return;
+  }
   for (const r of p.regions) {
     ctx.save();
     for (const c of r.cuts) ctx.clip(c, 'evenodd');

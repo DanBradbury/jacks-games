@@ -19,6 +19,7 @@ packages/kit/        shared code for all games
   src/fx.ts          particle effects (sparkles, confetti)
 games/coloring/      "Doodle & Color" – trace a picture, then color it in
 games/dice-dungeon/  "Dice Dungeon" – color browser version of printables/dice-dungeon
+games/stock-car/      "Stock Car Sunday" – a rolling-start stock car tutorial on a banked tri-oval
 scripts/
   package-game.mjs   zips a game's dist/ for upload and checks Playables rules
 ```
@@ -29,6 +30,7 @@ scripts/
 npm install
 npm run dev:coloring                      # dev server (also reachable from a phone on your LAN)
 npm run dev:dice-dungeon
+npm run dev:stock-car                     # steer with arrows or A/D, Space to boost, Down/S to brake
 npm run package -w @jack-games/coloring   # typecheck + build + zip → games/coloring/release/
 ```
 

@@ -1,0 +1,9 @@
+{
+  // Static-assets-only Worker serving the Vite build. Paths are relative to this file.
+  "name": "jacks-dice-dungeon",
+  "account_id": "9f04d330b9fb1e2b99bcb02a5f46fb03",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist"
+  }
+}

@@ -18,6 +18,7 @@ packages/kit/        shared code for all games
   src/audio.ts       synthesized sound effects (no audio files)
   src/fx.ts          particle effects (sparkles, confetti)
 games/coloring/      "Doodle & Color" – trace a picture, then color it in
+games/dice-dungeon/  "Dice Dungeon" – color browser version of printables/dice-dungeon
 scripts/
   package-game.mjs   zips a game's dist/ for upload and checks Playables rules
 ```
@@ -27,6 +28,7 @@ scripts/
 ```sh
 npm install
 npm run dev:coloring                      # dev server (also reachable from a phone on your LAN)
+npm run dev:dice-dungeon
 npm run package -w @jack-games/coloring   # typecheck + build + zip → games/coloring/release/
 ```
 
@@ -44,3 +46,13 @@ npm run package -w @jack-games/coloring   # typecheck + build + zip → games/co
 1. Copy `games/coloring` to `games/<name>`, rename the package to `@jack-games/<name>`.
 2. Use `@jack-games/kit` for SDK calls, sounds and effects.
 3. `npm run package -w @jack-games/<name>` and upload the zip in YouTube Studio.
+
+## Deploys
+
+Each game deploys to its own Cloudflare Worker (name in `games/<game>/wrangler.jsonc`) from
+GitHub Actions, **only on pushes to `main`** and **only when that game's files change**
+(`games/<game>/**`, plus shared `packages/kit/**` and `tsconfig.base.json`). Changing one game
+never redeploys another. Run a deploy by hand from the Actions tab (`workflow_dispatch`) or
+locally with `npm run deploy:<game>`.
+
+Needs the repo secret `CLOUDFLARE_API_TOKEN` (Workers Scripts: Edit).

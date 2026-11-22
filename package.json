@@ -7,10 +7,12 @@
   ],
   "scripts": {
     "dev:coloring": "npm run dev -w @jack-games/coloring",
+    "dev:dice-dungeon": "npm run dev -w @jack-games/dice-dungeon",
     "build": "npm run build --workspaces --if-present",
     "package": "npm run package --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "deploy:coloring": "npm run deploy -w @jack-games/coloring"
+    "deploy:coloring": "npm run deploy -w @jack-games/coloring",
+    "deploy:dice-dungeon": "npm run deploy -w @jack-games/dice-dungeon"
   },
   "devDependencies": {
     "typescript": "5.6.3",

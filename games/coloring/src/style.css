@@ -514,3 +514,14 @@ button {
     opacity: 0;
   }
 }
+
+/* Color your own picture */
+.add-card {
+  min-height: 180px;
+  color: #8a929c;
+  border-style: dashed;
+}
+.add-card svg {
+  width: 96px;
+  height: 96px;
+}

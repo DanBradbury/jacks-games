@@ -2,6 +2,7 @@ import './style.css';
 import { Particles, SCRATCH, Sfx, playables } from '@jack-games/kit';
 import { LEVELS, type ColorTool, type Level, type ToolKind } from './levels';
 import { PAGES } from './pages';
+import { pictureToPage } from './photo';
 import {
   INK,
   LINE_W,
@@ -66,6 +67,9 @@ const ui = {
 
 const sfx = new Sfx();
 const fx = new Particles();
+/** Hidden picker for "color your own picture". */
+const photoInput = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/*', hidden: true });
+document.body.appendChild(photoInput);
 
 type Phase = 'trace' | 'color' | 'done';
 type Mode = 'level' | 'page';
@@ -300,12 +304,13 @@ function addPaintPoint() {
 
 // ---- game flow ----------------------------------------------------------------
 
-const pageSave = () => (progress.pages[state.def.id!] ??= {});
+// Pictures from the device have no id and are never saved.
+const pageSave = () => (state.def.id ? (progress.pages[state.def.id] ??= {}) : {});
 
-function load(mode: Mode, i: number) {
+function load(mode: Mode, i: number, def?: Level) {
   state.mode = mode;
   state.index = i;
-  state.def = mode === 'page' ? PAGES[i] : LEVELS[i];
+  state.def = def ?? (mode === 'page' ? PAGES[i] : LEVELS[i]);
   state.prep = prepare(state.def);
   const { prep } = state;
   state.lineIdx = 0;
@@ -575,6 +580,8 @@ function renderTools() {
 
 const DONE_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+const ADD_ICON =
+  '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="9" width="38" height="30" rx="5"/><circle cx="16" cy="19" r="3.5"/><path d="M8 35l11-10 7 6 6-5 9 8"/><circle cx="38" cy="38" r="8" fill="#9be25a"/><path d="M38 34v8M34 38h8"/></svg>';
 
 function openLevels() {
   ui.grid.replaceChildren(
@@ -592,7 +599,17 @@ function openLevels() {
       return b;
     }),
   );
+  const addCard = document.createElement('button');
+  addCard.className = 'level-card page-card add-card';
+  addCard.setAttribute('aria-label', 'Color your own picture');
+  addCard.innerHTML = ADD_ICON;
+  addCard.onclick = () => {
+    sfx.unlock();
+    sfx.tap();
+    photoInput.click();
+  };
   ui.pageGrid.replaceChildren(
+    addCard,
     ...PAGES.map((pg, i) => {
       const saved = progress.pages[pg.id!] ?? {};
       const count = pageDone(pg);
@@ -633,17 +650,31 @@ ui.restart.onclick = () => {
 };
 $('btn-replay').onclick = () => {
   sfx.tap();
-  if (state.mode === 'page') {
+  if (state.mode === 'page' && state.def.id) {
     // Start the page over with a blank sheet.
-    progress.pages[state.def.id!] = {};
+    progress.pages[state.def.id] = {};
     void playables.save(SAVE_KEY, progress);
   }
-  load(state.mode, state.index);
+  load(state.mode, state.index, state.def);
 };
 $('btn-next').onclick = () => {
   sfx.pop(4);
   if (state.mode === 'page') openLevels();
   else load('level', (state.index + 1) % LEVELS.length);
+};
+
+photoInput.onchange = async () => {
+  const file = photoInput.files?.[0];
+  photoInput.value = '';
+  if (!file) return;
+  try {
+    const def = await pictureToPage(file);
+    sfx.whoosh();
+    load('page', -1, def);
+  } catch (e) {
+    console.warn(e);
+    sfx.boop();
+  }
 };
 
 // ---- input --------------------------------------------------------------------

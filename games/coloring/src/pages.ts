@@ -1,6 +1,6 @@
 // Full coloring pages: bigger scenes with no drawing step. Parts are listed
 // back-to-front (later parts hide earlier ones); `order` is the coloring order.
-import { C, circle, n, rect, type ColorTool, type Level } from './levels';
+import { C, circle, ellipse, n, rect, rrect, type ColorTool, type Level } from './levels';
 
 interface Part {
   id: string;
@@ -8,10 +8,6 @@ interface Part {
   color: string;
   detail?: string;
 }
-
-const rrect = (x: number, y: number, w: number, h: number, r: number) =>
-  `M${x + r} ${y} H${x + w - r} Q${x + w} ${y} ${x + w} ${y + r} V${y + h - r} Q${x + w} ${y + h} ${x + w - r} ${y + h} ` +
-  `H${x + r} Q${x} ${y + h} ${x} ${y + h - r} V${y + r} Q${x} ${y} ${x + r} ${y} Z`;
 
 /** Move/scale/flip a path made only of M/L/Q/C/Z (all absolute x,y pairs). */
 function tf(d: string, ox: number, oy: number, s: number, fx: number) {
@@ -136,9 +132,6 @@ const workshopOrder = [
   'frame', 'sky', 'moon', 'flags-a', 'flags-b', 'shelf', 'ball', 'block-a', 'block-b',
   'block-c', 'block-d', 'block-e', 'floor', 'wall',
 ];
-
-const ellipse = (cx: number, cy: number, rx: number, ry: number) =>
-  `M${cx} ${cy - ry} A${rx} ${ry} 0 1 1 ${cx} ${cy + ry} A${rx} ${ry} 0 1 1 ${cx} ${cy - ry} Z`;
 
 /** A simple pointed leaf centered at (x, y). */
 const leaf = (id: string, x: number, y: number, s: number, color: string): Part => ({

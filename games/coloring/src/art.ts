@@ -80,19 +80,36 @@ const subpaths = (d: string) => d.split(/(?=M)/).map((s) => s.trim()).filter(Boo
 
 export function sampleLine(d: string): LinePts {
   const p = getProbe();
-  p.setAttribute('d', d);
-  const total = p.getTotalLength();
-  const n = Math.max(2, Math.ceil(total / STEP) + 1);
-  const xs = new Float32Array(n);
-  const ys = new Float32Array(n);
-  const jump = new Uint8Array(n);
-  for (let i = 0; i < n; i++) {
-    const pt = p.getPointAtLength(Math.min(total, i * STEP));
-    xs[i] = pt.x;
-    ys[i] = pt.y;
-    if (i > 0 && Math.hypot(pt.x - xs[i - 1], pt.y - ys[i - 1]) > STEP * 3) jump[i] = 1;
+  const xs: number[] = [];
+  const ys: number[] = [];
+  const jump: number[] = [];
+  // getPointAtLength is slow and gets slower the longer the path, so walk one
+  // subpath at a time, ask for every third point and fill in between.
+  for (const sub of subpaths(d)) {
+    p.setAttribute('d', sub);
+    const total = p.getTotalLength();
+    const n = Math.max(2, Math.ceil(total / STEP) + 1);
+    const m = Math.max(1, Math.ceil(total / (STEP * 3)));
+    const cx: number[] = [];
+    const cy: number[] = [];
+    for (let j = 0; j <= m; j++) {
+      const pt = p.getPointAtLength((j * total) / m);
+      cx.push(pt.x);
+      cy.push(pt.y);
+    }
+    for (let i = 0; i < n; i++) {
+      const u = total > 0 ? (Math.min(total, i * STEP) / total) * m : 0;
+      const j = Math.min(m - 1, Math.floor(u));
+      const f = u - j;
+      const x = cx[j] + (cx[j + 1] - cx[j]) * f;
+      const y = cy[j] + (cy[j + 1] - cy[j]) * f;
+      const k = xs.length;
+      jump.push(k > 0 && Math.hypot(x - xs[k - 1], y - ys[k - 1]) > STEP * 3 ? 1 : 0);
+      xs.push(x);
+      ys.push(y);
+    }
   }
-  return { xs, ys, jump, n };
+  return { xs: Float32Array.from(xs), ys: Float32Array.from(ys), jump: Uint8Array.from(jump), n: xs.length };
 }
 
 const tester = document.createElement('canvas').getContext('2d')!;
@@ -164,12 +181,16 @@ export function prepare(level: Level): Prepared {
     return { path: new Path2D(r.d), cuts, detail: r.detail ? new Path2D(r.detail) : null };
   });
   const page = level.kind === 'page';
+  // Sampling lines is slow (getPointAtLength) and only tracing needs it, not thumbnails.
+  let lines: LinePts[] | undefined;
   p = {
     w,
     h,
     page,
     lineWidth: level.lineWidth ?? LINE_W,
-    lines: level.lines.map(sampleLine),
+    get lines() {
+      return (lines ??= level.lines.map(sampleLine));
+    },
     linePaths: level.lines.map((d) => new Path2D(d)),
     regions,
     samples: sampleRegions(level, boxes, zs, w, h, page ? 6 : 5),

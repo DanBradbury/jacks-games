@@ -222,12 +222,12 @@ export function createWorld(scene,scans,cityTextures,rackFront) {
   add(new T.SphereGeometry(.029,20,14),bulb,lampX,2.265,lampZ);
   // Limit direct light to the aperture. The opaque shade screens the
   // upper hemisphere, including the socket, suspension cord and ceiling.
-  const pool=new T.SpotLight(0xb8bbaa,2.15,4.00,1.29,.40,2);
+  const pool=new T.SpotLight(0xd6d5bc,10.5,5.0,1.29,.28,2);
   pool.position.set(lampX,2.265,lampZ);
-  pool.target.position.set(lampX,0,lampZ);
+  pool.target.position.set(lampX+.20,0,lampZ);
   scene.add(pool,pool.target);
-  agingLamp(bulb,[pool],13.25,16.7,.69);
-  agingLamp(lining,[],13.25,16.7,.69);
+  agingLamp(bulb,[pool],11.85,7.8,.55);
+  agingLamp(lining,[],11.85,7.8,.55);
   // End bulkhead frames a real opening into the machine room.
   for(let x of [-1.93,1.93])box(x,1.75,-22.25,1.48,3.5,.32,m.wall);
   box(0,3.08,-22.25,2.45,.88,.32,m.wall);

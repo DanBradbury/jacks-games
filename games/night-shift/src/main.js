@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { createWorld, canStand } from './world.js';
-import { createCameraOutput, tourPose } from './camera.js';
+import { createCameraOutput, tourPose, TOUR_SECONDS } from './camera.js';
 import { createSoundscape } from './sound.js';
 import './style.css';
 
@@ -111,7 +111,9 @@ async function boot(){
     const real=(now-last)/1000,dt=Math.min(.05,real);last=now;elapsed+=real;
    if(mode==='walk')walk(dt);
    else if(mode==='tour'){
-     tourPose(camera,elapsed);stepClock+=dt;if(stepClock>.53&&elapsed<28.6){sound?.step(.49);stepClock=0;}
+     const {x,z}=camera.position;
+     tourPose(camera,elapsed);stepClock+=Math.hypot(camera.position.x-x,camera.position.z-z);
+     if(stepClock>=.85){sound?.step(.49);stepClock%=.85;}
    }else{
      tourPose(camera,0);camera.position.set(-1.08,1.58,4.85);camera.rotation.set(-.052,-.126+.015*Math.sin(now*.00013),-.012,'YXZ');
    }
@@ -121,7 +123,7 @@ async function boot(){
    }
    updateWorld(elapsed);
    output.draw(elapsed,filter,mode!=='menu');
-   if(mode==='tour'&&elapsed>=30)showMenu();
+   if(mode==='tour'&&elapsed>=TOUR_SECONDS)showMenu();
    requestAnimationFrame(tick);
   }
   $('status').textContent='';

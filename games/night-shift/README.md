@@ -4,15 +4,15 @@ First-person Three.js walkthrough of an industrial skybridge after hours. The si
 
 ## Play
 
-From the repository root, run `npm ci` and `npm run dev -w @jack-games/night-shift`. Open the local URL and choose **Enter hallway** for free movement or **Play 30s tour** for the camera route.
+From the repository root, run `npm ci` and `npm run dev -w @jack-games/night-shift`. Open the local URL and choose **Enter hallway** for free movement or **Play 26s tour** for the camera route.
 
 Use WASD to walk, the mouse to look, Shift to run, F to toggle the camera filter, and Escape to return to the menu. Arrow keys also move and turn. On touchscreens, use the left pad to move and drag the scene to look.
 
 ## Video
 
-[Download the finished 30-second bodycam tour](media/night-shift.mp4). The MP4 contains 1280 × 720 H.264 video at 30 fps and stereo AAC audio.
+[Download the finished 26-second bodycam tour](media/night-shift.mp4). The MP4 contains 1280 × 720 H.264 video at 30 fps and stereo AAC audio.
 
-To make another take, select **Bodycam** or **Clean**, then **Record tour**. Keep the tab visible while it renders 900 frames. Export time depends on GPU speed. The browser downloads an MP4 or WebM according to encoder support. The controls stay outside the recorded image.
+To make another take, select **Bodycam** or **Clean**, then **Record tour**. Keep the tab visible while it renders 780 frames. Export time depends on GPU speed. The browser downloads an MP4 or WebM according to encoder support. The controls stay outside the recorded image.
 
 ## Cloudflare
 

@@ -222,7 +222,7 @@ export function createWorld(scene,scans,cityTextures,rackFront) {
   add(new T.SphereGeometry(.029,20,14),bulb,lampX,2.265,lampZ);
   // Limit direct light to the aperture. The opaque shade screens the
   // upper hemisphere, including the socket, suspension cord and ceiling.
-  const pool=new T.SpotLight(0xb8bbaa,1.55,3.65,1.29,.40,2);
+  const pool=new T.SpotLight(0xb8bbaa,2.15,4.00,1.29,.40,2);
   pool.position.set(lampX,2.265,lampZ);
   pool.target.position.set(lampX,0,lampZ);
   scene.add(pool,pool.target);

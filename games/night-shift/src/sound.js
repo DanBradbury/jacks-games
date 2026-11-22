@@ -1,6 +1,6 @@
 import { PerspectiveCamera } from 'three';
 import { distanceToWindow } from './windows.js';
-import { tourPose } from './camera.js';
+import { tourPose, TOUR_SECONDS } from './camera.js';
 
 // All sound is synthesized locally. The offline mix and live scene share this graph.
 function random(seed) {
@@ -188,19 +188,23 @@ export function createSoundscape(context = new AudioContext()) {
   };
 }
 
-export async function renderTourAudio(duration = 30) {
+export async function renderTourAudio(duration = TOUR_SECONDS) {
   const sampleRate = 48000;
   const ctx = new OfflineAudioContext(2, Math.round(duration * sampleRate), sampleRate);
   const mix = buildMix(ctx);
   const camera=new PerspectiveCamera();
-  for (let time = 0; time < duration; time += 0.25) {
+  const roll=random(1387);
+  let traveled=0;
+  tourPose(camera,0);
+  for(let frame=0;frame<duration*30;frame++){
+    const time=frame/30,{x,z}=camera.position;
     tourPose(camera,time);
-    mix.setWindows(camera.position.x,camera.position.z,camera.rotation.y,time);
-    mix.setPosition((-camera.position.z-20)/7.5,time);
-  }
-  const roll = random(1387);
-  for (let time = 0.48; time < duration - 1.4; time += 0.48 + roll() * 0.1) {
-    mix.step(0.38 + roll() * 0.35, time);
+    traveled+=Math.hypot(camera.position.x-x,camera.position.z-z);
+    if(traveled>=.85){mix.step(.38+roll()*.35,time);traveled%=.85;}
+    if(frame%6===0){
+      mix.setWindows(camera.position.x,camera.position.z,camera.rotation.y,time);
+      mix.setPosition((-camera.position.z-20)/7.5,time);
+    }
   }
   mix.level.gain.setValueAtTime(0.001, 0);
   mix.level.gain.linearRampToValueAtTime(0.72, 0.35);

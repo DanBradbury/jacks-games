@@ -1,3 +1,4 @@
+import { TOUR_SECONDS } from './camera.js';
 import { renderTourAudio } from './sound.js';
 
 async function selectFormat(width,height) {
@@ -35,7 +36,7 @@ export async function recordTour(canvas,draw,progress,signal) {
   function check(){signal.throwIfAborted();if(error)throw error;}
   try {
     ve.configure(video);ae.configure(audio);
-    const mix=await renderTourAudio(30);
+    const mix=await renderTourAudio();
     const block=mp4?1024:960;
     for(let start=0;start<mix.length;start+=block){
       check();
@@ -47,13 +48,14 @@ export async function recordTour(canvas,draw,progress,signal) {
       await drain(ae,48);
     }
     await ae.flush();
-    for(let i=0;i<900;i++){
+    const totalFrames=TOUR_SECONDS*video.framerate;
+    for(let i=0;i<totalFrames;i++){
       check();draw(i/30);
       const ts=Math.round(i*1e6/30);
       const frame=new VideoFrame(canvas,{timestamp:ts,duration:Math.round((i+1)*1e6/30)-ts});
       ve.encode(frame,{keyFrame:i%90===0});frame.close();
       await drain(ve,10);
-      if(i%6===0){progress(i/900);await new Promise(resolve=>setTimeout(resolve,0));}
+      if(i%6===0){progress(i/totalFrames);await new Promise(resolve=>setTimeout(resolve,0));}
     }
     await ve.flush();check();muxer.finalize();
     return {blob:new Blob([muxer.target.buffer],{type:mp4?'video/mp4':'video/webm'}),ext:mp4?'mp4':'webm'};

@@ -1,31 +1,28 @@
 import * as T from 'three';
 
-// Time, camera x/z, yaw, pitch. Tangents slow naturally at a change in direction.
-const frames=[
- [0,-.8,5.6,-.11,-.035],[2,-.56,3.8,.02,-.045],
- [4.7,-.98,.1,1.23,.06],[6.5,-1.02,-2.1,.92,.035],
- [9,.24,-6.3,-.35,-.045],[11,1.2,-8.64,-1.08,-.025],
- [13.2,3.65,-9.14,-1.60,.09],[14.8,4.33,-9.3,-1.65,-.32],
- [16.4,3.45,-9.3,-1.16,-.03],[18.1,1.35,-9.43,-.35,-.03],
- [20.8,.37,-13.3,.02,-.065],[23.1,.16,-17.48,.13,.015],
- [25.6,-.05,-21.7,-.04,.005],[27.7,.03,-24.12,-.10,-.045],
- [30,.06,-25.65,-.045,-.15]
+export const TOUR_SECONDS=26;
+
+// Uniform cubic B-spline control poses: x, z, yaw and pitch. Positions and
+// viewing angles share continuous velocity and acceleration through each turn.
+const entrance=[-.8,5.6,-.11,-.035],racks=[.06,-25.65,-.045,-.15];
+const poses=[
+  entrance,entrance,entrance,[-.62,2.6,.33,-.01],[-1.02,-.35,1.38,.08],
+  [.08,-6.3,-.37,-.055],[1.95,-9.43,-1.3,.01],[4.46,-9.14,-1.68,.09],
+  [4.62,-9.30,-1.72,-.35],[1.45,-9.13,-.44,-.065],[.32,-12.5,.07,-.035],
+  [.12,-17.2,.10,.015],[-.06,-21.7,-.04,.005],racks,racks,racks
 ];
-function tangent(i,k) {
- if(i===0||i===frames.length-1)return 0;
- const a=frames[i-1],b=frames[i],c=frames[i+1];
- if((b[k]-a[k])*(c[k]-b[k])<=0)return 0;
- return (c[k]-a[k])/(c[0]-a[0]);
-}
 export function tourPose(camera,time){
- const t=T.MathUtils.clamp(time,0,30);
- let i=0;while(i<frames.length-2 && frames[i+1][0]<t)i++;
- const a=frames[i],b=frames[i+1],span=b[0]-a[0],f=(t-a[0])/span,f2=f*f,f3=f*f2;
- const v=k=>(2*f3-3*f2+1)*a[k]+(f3-2*f2+f)*span*tangent(i,k)+
-   (-2*f3+3*f2)*b[k]+(f3-f2)*span*tangent(i+1,k);
- const sway=Math.sin(t*5.85)*.024*Math.min(1,t,30-t);
- camera.position.set(v(1)+sway,1.62+Math.sin(t*11.7)*.021,v(2));
- camera.rotation.set(v(4)+sway*.22,v(3),sway*.38,'YXZ');
+  const t=T.MathUtils.clamp(time,0,TOUR_SECONDS);
+  const segments=poses.length-3, u=t*segments/TOUR_SECONDS;
+  const i=Math.min(Math.floor(u),segments-1), f=u-i, g=1-f;
+  const a=poses[i],b=poses[i+1],c=poses[i+2],d=poses[i+3];
+  const blend=k=>(g**3*a[k]+(3*f**3-6*f*f+4)*b[k]+
+    (1+3*f+3*f*f-3*f**3)*c[k]+f**3*d[k])/6;
+  const rate=k=>(g*g*(b[k]-a[k])+ (1+2*f*g)*(c[k]-b[k])+f*f*(d[k]-c[k]))*.5*segments/TOUR_SECONDS;
+  const stride=Math.min(1,Math.hypot(rate(0),rate(1)));
+  const sway=Math.sin(t*5.4)*.007*stride;
+  camera.position.set(blend(0)+sway,1.62+Math.sin(t*10.8)*.005*stride,blend(1));
+  camera.rotation.set(blend(3),blend(2),sway*.14,'YXZ');
 }
 
 export function createCameraOutput(renderer,scene,camera){

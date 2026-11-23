@@ -30,7 +30,7 @@ scripts/
 npm install
 npm run dev:coloring                      # dev server (also reachable from a phone on your LAN)
 npm run dev:dice-dungeon
-npm run dev:stock-car                     # steer with arrows or A/D, Space to boost, Down/S to brake
+npm run dev:stock-car                     # steer with arrows or A/D, Down/S to brake
 npm run package -w @jack-games/coloring   # typecheck + build + zip → games/coloring/release/
 ```
 

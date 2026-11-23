@@ -127,46 +127,60 @@ export function draw(ctx:CanvasRenderingContext2D,w:number,h:number,cars:Car[],f
       for(let k=0;k<16;k++){const a=k*Math.PI/8,p=world(g,c.x+1.22*Math.cos(a),.01);p[0]+=g.tx*2.7*Math.sin(a);p[2]+=g.tz*2.7*Math.sin(a);shadow.push(p)}
       poly(shadow,'#323838')
       const faces:Job[]=[]
-      function face(col:string,pts:V[],label?:string){
-        const vertices=pts.map(p=>v(...p))
-        faces.push({depth:vertices.reduce((z,p)=>z+depth(p),0)/vertices.length,paint:()=>{
-          poly(vertices,col);const corners=vertices.map(project)
-          if(label&&corners.every(Boolean)){
-            const [a,b,,d]=corners as P[]
-            ctx.save();ctx.transform((b[0]-a[0])/100,(b[1]-a[1])/100,(d[0]-a[0])/50,(d[1]-a[1])/50,a[0],a[1])
-            ctx.font='italic 900 55px Arial';ctx.textAlign='center';ctx.fillStyle='#fff7d9';ctx.strokeStyle='#292a29';ctx.lineWidth=4;ctx.strokeText(label,50,45);ctx.fillText(label,50,45);ctx.restore()
+      // Cull hidden panels, then paint each visible panel and its details as one job.
+      // A decal's center depth can differ from its panel's when steering or banking.
+      type Mark = { color:string; points:V[]; label?:string }
+      const quad=(x:number,X:number,y:number,Y:number,z:number,Z:number):V[]=>
+        [[x,y,z],[X,y,z],[X,Y,Z],[x,Y,Z]]
+      function surface(color:string,points:V[],winding:number,marks:Mark[]=[],label?:string){
+        const vertices=points.map(p=>v(...p)),[a,b,c]=vertices
+        const bx=b[0]-a[0],by=b[1]-a[1],bz=b[2]-a[2]
+        const cx=c[0]-a[0],cy=c[1]-a[1],cz=c[2]-a[2]
+        const facing=(by*cz-bz*cy)*(cam[0]-a[0])+(bz*cx-bx*cz)*(cam[1]-a[1])+(bx*cy-by*cx)*(cam[2]-a[2])
+        if(winding && winding*facing<=0)return
+        faces.push({depth:vertices.reduce((sum,p)=>sum+view(p)[2],0)/vertices.length,paint:()=>{
+          poly(vertices,color)
+          if(label)numberLabel(vertices,label)
+          for(const mark of marks){
+            const pts=mark.points.map(p=>v(...p))
+            poly(pts,mark.color)
+            if(mark.label)numberLabel(pts,mark.label)
           }
         }})
       }
-      const paint=colors[i],cream='#fff1cc'
-      function panel(col:string,x:number,X:number,y:number,Y:number,z:number,Z:number,label?:string){
-        face(col,[[x,y,z],[X,y,z],[X,Y,Z],[x,Y,Z]],label)
+      function numberLabel(vertices:V[],label:string){
+        const corners=vertices.map(project)
+        if(!corners.every(Boolean))return
+        const [a,b,,d]=corners as P[]
+        ctx.save();ctx.transform((b[0]-a[0])/100,(b[1]-a[1])/100,(d[0]-a[0])/50,(d[1]-a[1])/50,a[0],a[1])
+        ctx.font='italic 900 55px Arial';ctx.textAlign='center';ctx.fillStyle='#fff7d9';ctx.strokeStyle='#292a29';ctx.lineWidth=4;ctx.strokeText(label,50,45);ctx.fillText(label,50,45);ctx.restore()
       }
-      // Long hood, squared trunk, sloping glass and a separate roof.
-      panel('#242b2c',-1,1,.18,.18,-2.4,2.4)
-      panel(paint,-1,1,.3,.86,-2.4,-2.39)
-      panel('#e8d9ac',-.35,.35,.48,.70,-2.412,-2.412,String(numbers[i]))
-      panel('#303331',-.98,.98,.30,.45,-2.42,-2.42)
-      for(const x of [-.91,.52])panel('#ac342b',x,x+.39,.57,.74,-2.42,-2.42)
-      panel(paint,-1,1,.86,.9,-2.4,-1.35)
-      panel('#24383c',-.89,.89,.9,1.46,-1.35,-.65)
-      for(const x of [-.72,-.02,.68])panel('#586965',x,x+.035,.91,1.45,-1.36,-.66)
-      panel(paint,-.84,.84,1.47,1.47,.52,-.66,String(numbers[i]))
-      panel('#3e5558',-.85,.85,1.46,.91,.52,1.15)
-      panel(paint,-1,1,.91,.79,1.15,2.4)
-      for(const x of [-.46,.23]){panel(cream,x,x+.23,.915,.795,1.15,2.4);panel(cream,x,x+.23,.865,.905,-2.4,-1.35)}
-      panel('#333a38',-1,1,.27,.79,2.4,2.4)
-      for(const x of [-.92,.58])panel(cream,x,x+.34,.51,.69,2.41,2.41)
-      panel('#252e2e',-1.04,1.04,.87,1,-2.32,-2.44)
+      const paint=colors[i],cream='#fff1cc',number=String(numbers[i])
+      surface('#242b2c',quad(-1,1,.18,.18,-2.4,2.4),1)
+      surface(paint,quad(-1,1,.3,.86,-2.4,-2.39),-1,[
+        {color:'#e8d9ac',points:quad(-.35,.35,.70,.48,-2.412,-2.412),label:number},
+        {color:'#303331',points:quad(-.98,.98,.30,.45,-2.42,-2.42)},
+        ...[-.91,.52].map(x=>({color:'#ac342b',points:quad(x,x+.39,.57,.74,-2.42,-2.42)}))
+      ])
+      const stripes=(y:number,Y:number,z:number,Z:number)=>[-.46,.23].map(x=>({color:cream,points:quad(x,x+.23,y,Y,z,Z)}))
+      surface(paint,quad(-1,1,.86,.9,-2.4,-1.35),-1,stripes(.86,.9,-2.4,-1.35))
+      surface('#24383c',quad(-.89,.89,.9,1.46,-1.35,-.65),-1,
+        [-.72,-.02,.68].map(x=>({color:'#586965',points:quad(x,x+.035,.9,1.46,-1.35,-.65)})))
+      surface(paint,quad(-.84,.84,1.47,1.47,.52,-.66),1,[],number)
+      surface('#3e5558',quad(-.85,.85,1.46,.91,.52,1.15),-1)
+      surface(paint,quad(-1,1,.91,.79,1.15,2.4),-1,stripes(.91,.79,1.15,2.4))
+      surface('#333a38',quad(-1,1,.27,.79,2.4,2.4),1,
+        [-.92,.58].map(x=>({color:cream,points:quad(x,x+.34,.51,.69,2.41,2.41)})))
+      surface('#252e2e',quad(-1.04,1.04,.87,1,-2.32,-2.44),0)
       for(const side of [-1,1]){
         const x=side*1.01
-        face(paint,[[x,.87,-2.39],[x,.79,2.4],[x,.26,2.4],[x,.26,-2.39]])
-        face('#344449',[[x,.90,-1.34],[side*.84,1.45,-.64],[side*.84,1.45,.52],[x,.90,1.13]])
-        face(paint,[[x*1.005,.84,-.75],[x*1.005,.84,.78],[x*1.005,.32,.78],[x*1.005,.32,-.75]],String(numbers[i]))
+        const marks:Mark[]=[{color:paint,points:[[x,.84,-.75],[x,.84,.78],[x,.32,.78],[x,.32,-.75]],label:number}]
         for(const z of [-1.51,1.52])for(const r of [.39,.18]){
           const rim:V[]=[];for(let k=0;k<12;k++){const a=k*Math.PI/6;rim.push([side*(r>.2?1.03:1.045),.39+r*Math.sin(a),z+r*Math.cos(a)])}
-          face(r>.2?'#222827':'#adae9b',rim)
+          marks.push({color:r>.2?'#222827':'#adae9b',points:rim})
         }
+        surface(paint,[[x,.87,-2.39],[x,.79,2.4],[x,.26,2.4],[x,.26,-2.39]],side,marks)
+        surface('#344449',[[x,.90,-1.34],[side*.84,1.45,-.64],[side*.84,1.45,.52],[x,.90,1.13]],side)
       }
       faces.sort((a,b)=>b.depth-a.depth).forEach(j=>j.paint())
     }})

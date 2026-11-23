@@ -1,11 +1,13 @@
 import './style.css'
 import { Particles, playables, Sfx } from '@jack-games/kit'
 import { Race, track, length, type Car, type Contact } from './race'
+import { setupGarage } from './garage'
 import { draw } from './view'
 
 const el=(id:string)=>document.getElementById(id)!
 const canvas=el('track') as HTMLCanvasElement, ctx=canvas.getContext('2d')!
 const map=el('map') as HTMLCanvasElement, mc=map.getContext('2d')!
+const garage=setupGarage()
 const sound=new Sfx(), particles=new Particles()
 type Mode='grid'|'race'|'replay'|'finish'
 let mode:Mode='grid',race=new Race(),manualPause=false,hostPause=false
@@ -16,6 +18,7 @@ const held=new Set<string>(), pointers=new Map<number,string>()
 const active=(id:string)=>held.has(id)||[...pointers.values()].includes(id)
 function clearInput(){held.clear();pointers.clear();document.querySelectorAll('.pressed').forEach(b=>b.classList.remove('pressed'))}
 function panel(kicker:string,title:string,copy:string,action:string){
+  el('garage-open').hidden=mode!=='grid'&&mode!=='finish'
   el('prompt').hidden=false;el('kicker').textContent=kicker;el('title').textContent=title
   el('copy').textContent=copy;el('action').textContent=action
 }
@@ -52,6 +55,7 @@ for(const id of ['left','right','brake','boost']){
 }
 const keys:Record<string,string>={ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',ArrowDown:'brake',KeyS:'brake',Space:'boost'}
 window.onkeydown=e=>{
+  if(garage.dialog.open)return
   if(e.code==='Escape'&&!e.repeat){togglePause();return}
   if(e.code==='Space'&&document.activeElement instanceof HTMLButtonElement&&mode!=='race')return
   const id=keys[e.code];if(!id)return;e.preventDefault()
@@ -65,7 +69,7 @@ sound.setEnabled(playables.isAudioEnabled());playables.onAudioEnabledChange(v=>s
 playables.installErrorLogging()
 function finish(){
   mode='finish';sound.fanfare();particles.confetti(canvas.clientWidth,canvas.clientHeight,['#ff803d','#e6cd84','#f9f5db','#61aaa3'])
-  panel('CHECKERED FLAG','Across the line!',`No. 27 finished ${race.place} of 10. Take another run at the pack.`,'RACE AGAIN  →')
+  panel('CHECKERED FLAG','Across the line!',`No. ${garage.car.number} finished ${race.place} of 10. Take another run at the pack.`,'RACE AGAIN  →')
   const place=race.place
   void saved.then(()=>{best=Math.min(best,place);return playables.save('stock-car',{best})})
   playables.sendScore(11-place)
@@ -100,7 +104,7 @@ function mini(cars:Car[]){
   mc.clearRect(0,0,260,124)
   const pos=(s:number)=>{const f=track(s);return [130+f.z*.14,16-f.x*.123] as const}
   mc.beginPath();for(let i=0;i<=120;i++)mc.lineTo(...pos(length*i/120));mc.closePath();mc.lineWidth=6;mc.strokeStyle='#a8aa95';mc.stroke()
-  for(let i=cars.length-1;i>=0;i--){mc.beginPath();mc.arc(...pos(cars[i].s),i?3:7,0,7);mc.fillStyle=i?'#eee9cc':'#ff7639';mc.fill()}
+  for(let i=cars.length-1;i>=0;i--){mc.beginPath();mc.arc(...pos(cars[i].s),i?3:7,0,7);mc.fillStyle=i?'#eee9cc':garage.car.paint;mc.fill()}
 }
 function render(){
   const w=canvas.clientWidth,h=canvas.clientHeight,dpr=Math.min(2,devicePixelRatio)
@@ -108,7 +112,7 @@ function render(){
   ctx.setTransform(dpr,0,0,dpr,0,0)
   const replay=mode==='replay',angle=replay?(playTime<clipDuration()?1:2):0
   const cars=replay?frames[Math.min(frames.length-1,Math.floor((playTime%clipDuration())*24*.65))]:race.cars
-  spots=draw(ctx,w,h,cars,replay?focus:0,angle,mode==='race'&&race.boost>0);mini(cars);particles.draw(ctx)
+  spots=draw(ctx,w,h,cars,replay?focus:0,angle,mode==='race'&&race.boost>0,garage.car.paint,garage.car.number);mini(cars);particles.draw(ctx)
   const place=1+cars.slice(1).filter(c=>c.s>cars[0].s).length
   el('place').innerHTML=place+'<span>/10</span>';el('laps').textContent=String(Math.max(0,2-Math.floor(cars[0].s/length))).padStart(2,'0')
   el('mph').textContent=String(Math.round(cars[0].v*2.237))

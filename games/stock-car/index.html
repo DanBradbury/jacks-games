@@ -5,7 +5,17 @@
 <section id="stage" aria-label="Race track"><canvas id="track"></canvas>
 <div class="tower"><div class="tower-head"><i></i> <span id="status">ROLLING START</span></div><div class="stats"><div><small>POSITION</small><strong id="place">10<span>/10</span></strong></div><div><small>LAPS LEFT</small><strong id="laps">02</strong></div></div></div>
 <div class="map"><canvas id="map" width="260" height="124" aria-label="Track map"></canvas></div>
-<div id="prompt"><small id="kicker">TUTORIAL &nbsp;/&nbsp; 01</small><h1 id="title">Backstretch <em>charge.</em></h1><p id="copy">Two laps left. Hit boost to catch the pack, then tuck in behind a car to draft.</p><button id="action">JOIN RACE &nbsp; →</button></div>
+<div id="prompt"><small id="kicker">TUTORIAL &nbsp;/&nbsp; 01</small><h1 id="title">Backstretch <em>charge.</em></h1><p id="copy">Two laps left. Hit boost to catch the pack, then tuck in behind a car to draft.</p><button id="garage-open">GARAGE</button> <button id="action">JOIN RACE &nbsp; →</button></div>
 <div id="speed"><b id="mph">170</b><small>MPH</small><i></i></div>
-</section><footer><div class="driver"><span>27</span><div><small>DRIVER</small><b>YOU</b></div></div><div class="controls"><button id="left" title="Steer left (← or A)" aria-label="Steer left">◀</button><button id="right" title="Steer right (→ or D)" aria-label="Steer right">▶</button><button id="brake" title="Brake (↓ or S)">BRAKE</button><button id="boost" title="Use boost (Space)">ϟ &nbsp;BOOST</button></div><div class="draft"><small>SLIPSTREAM</small><meter min="0" max="1" value="0" id="wake"></meter></div></footer>
-</main><script type="module" src="/src/main.ts"></script></body></html>
+</section><footer><div class="driver"><canvas id="driver-icon" width="80" height="88" aria-label="Your driver"></canvas><span id="driver-number">27</span><div><small>DRIVER</small><b>YOU</b></div></div><div class="controls"><button id="left" title="Steer left (← or A)" aria-label="Steer left">◀</button><button id="right" title="Steer right (→ or D)" aria-label="Steer right">▶</button><button id="brake" title="Brake (↓ or S)">BRAKE</button><button id="boost" title="Use boost (Space)">ϟ &nbsp;BOOST</button></div><div class="draft"><small>SLIPSTREAM</small><meter min="0" max="1" value="0" id="wake"></meter></div></footer>
+</main>
+<dialog id="garage" aria-labelledby="garage-title"><form method="dialog" id="garage-form">
+<h1 id="garage-title">Race garage</h1>
+<div class="garage-body settings"><div class="driver-card"><canvas id="portrait" width="320" height="350" aria-label="Driver preview"></canvas></div>
+<fieldset id="driver-options"><legend>Driver</legend></fieldset>
+<div class="driver-card"><canvas id="car-preview" width="360" height="220" aria-label="Rotating stock car"></canvas><b id="preview-number"></b></div>
+<fieldset><legend>Stock car</legend>
+<label>Body paint<input name="paint" type="color" value="#ff5c25"></label>
+<label>Race number<input name="number" value="27" inputmode="numeric" pattern="[0-9]{1,2}" maxlength="2" required title="One or two digits"></label></fieldset>
+</div>
+<div class="garage-actions"><button type="button" id="garage-cancel">CANCEL</button><button id="garage-apply">APPLY</button></div></form></dialog><script type="module" src="/src/main.ts"></script></body></html>

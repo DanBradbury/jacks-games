@@ -46,7 +46,7 @@ export function track(s: number) {
 }
 export const colors=['#ff5c25','#4899c2','#f5be33','#e9e4d3','#bc3842','#57ac90','#bc86ca','#477bd0','#ef9442','#cee256']
 export const numbers=[27,43,12,71,8,56,92,19,64,3]
-export interface Car {s:number; x:number; v:number; vx:number; yaw:number; spin:number; roll:number; vr:number; h:number; vh:number; recovery:number
+export interface Car {s:number; x:number; v:number; vx:number; yaw:number; spin:number; spinTarget:number; roll:number; vr:number; h:number; vh:number; recovery:number
   // Fishtail amplitude (radians) and its oscillator phase; contact cooldown; AI lane;
   // riding the wall; the car that last got this one loose (-1 for none).
   wobble:number; phase:number; touch:number; lane:number; think:number; wall:boolean; by:number}
@@ -57,9 +57,45 @@ const lanes=[-6.4,-2.6,2.6,6.4]
 export function field(): Car[] {
   return colors.map((_,i)=>{
     const x=i?(i%2?-2.6:2.6):-2.6
-    return {s:start+(i?30+Math.floor((i-1)/2)*12+(i%2)*3:0),x,v:i?78:76,vx:0,yaw:0,spin:0,roll:0,vr:0,h:0,vh:0,recovery:0,
+    return {s:start+(i?30+Math.floor((i-1)/2)*12+(i%2)*3:0),x,v:i?78:76,vx:0,yaw:0,spin:0,spinTarget:0,roll:0,vr:0,h:0,vh:0,recovery:0,
       wobble:0,phase:i,touch:0,lane:x,think:0,wall:false,by:-1}
   })
+}
+// Project both rotated footprints onto each door and bumper normal. The
+// shallowest overlap gives the direction in which the bodies can separate.
+function resolveWreck(a:Car,b:Car){
+  const dx=b.x-a.x, ds=b.s-a.s
+  if(Math.abs(dx)>5.3 || Math.abs(ds)>5.3)return 0
+  const ca=Math.cos(a.yaw), sa=Math.sin(a.yaw), cb=Math.cos(b.yaw), sb=Math.sin(b.yaw)
+  let overlap=Infinity, nx=0, ns=0
+  for(const [x,s] of [[ca,-sa],[sa,ca],[cb,-sb],[sb,cb]]){
+    const extent=1.025*(Math.abs(x*ca-s*sa)+Math.abs(x*cb-s*sb))
+      +2.4*(Math.abs(x*sa+s*ca)+Math.abs(x*sb+s*cb))
+    const distance=dx*x+ds*s
+    const depth=extent-Math.abs(distance)
+    if(depth<=0)return 0
+    if(depth<overlap){
+      const sign=distance<0?-1:1
+      overlap=depth;nx=x*sign;ns=s*sign
+    }
+  }
+  const separation=overlap*.5
+  a.x-=nx*separation;b.x+=nx*separation
+  a.s-=ns*separation;b.s+=ns*separation
+  // If either body reaches the wall, the other must take the remaining travel.
+  if(a.x>9){b.x-=a.x-9;a.x=9}
+  if(b.x>9){a.x-=b.x-9;b.x=9}
+  const relativeX=a.vx-b.vx, relativeS=a.v-b.v
+  const closing=Math.max(0,relativeX*nx+relativeS*ns)
+  const normal=closing*.5
+  // Scrubbing along a rotating panel also transfers forward momentum, even
+  // when separation is mostly sideways.
+  const slip=relativeS*nx-relativeX*ns
+  const friction=Math.sign(slip)*Math.min(Math.abs(slip)*.5,(normal+overlap*8)*.65)
+  const lateral=nx*normal-ns*friction, forward=ns*normal+nx*friction
+  a.vx-=lateral;b.vx+=lateral
+  a.v-=forward;b.v+=forward
+  return closing+Math.abs(friction)
 }
 export class Race {
   cars=field()
@@ -70,6 +106,7 @@ export class Race {
   place=10
   finished=false
   events:Contact[]=[]
+  private quarterPressure = new Map<Car, number>()
   ignite(){if(this.fuel && !this.finished && !this.cars[0].recovery){this.fuel=0;this.boost=3;return true}return false}
   // Nearest healthy-or-not car ahead of `c` within `range` metres around lateral position `x`.
   ahead(c:Car,x:number,range:number){
@@ -89,7 +126,7 @@ export class Race {
     }
     const spin=(c:Car,index:number,force:number,side:number,trip:boolean,by=-1)=>{
       if(c.recovery>0)return
-      c.spin=side*(2.8+force*.18); c.v*=.71; c.recovery=2.4; c.wobble=0
+      c.spinTarget=side*(2.8+force*.18); c.recovery=2.4; c.wobble=0
       if(trip){c.vh=6.8; c.vr=side*4.55}
       emit('spin',index,-1,force)
       // Only replay crashes the player is part of.
@@ -135,7 +172,11 @@ export class Race {
         if(this.boost&&!troubled)rate=1.5
         lateral=steer*10.8*(1-c.wobble*.5)
       }
-      c.v+=(target-c.v)*dt*rate
+      if(troubled){
+        // Sliding tires scrub speed progressively as the body turns broadside.
+        const scrub=2+12*Math.abs(Math.sin(c.yaw))
+        c.v=Math.max(0,c.v-scrub*dt)
+      }else c.v+=(target-c.v)*dt*rate
       c.vx+=(lateral-c.vx)*dt*(troubled?.5:3.2)
       if(c.x<8.6)c.wall=false
       c.x+=(c.vx+slide)*dt; c.s+=c.v*dt
@@ -160,7 +201,9 @@ export class Race {
       }
       if(c.recovery>0){
         c.recovery=Math.max(0,c.recovery-dt)
-        c.yaw+=c.spin*dt;c.spin*=Math.exp(-1.25*dt)
+        c.spin+=(c.spinTarget-c.spin)*(1-Math.exp(-7*dt))
+        c.spinTarget*=Math.exp(-1.25*dt)
+        c.yaw+=c.spin*dt
         c.h+=c.vh*dt;c.vh-=9.81*dt
         if(c.h>0){c.roll+=c.vr*dt}
         else {c.h=0;c.vh=0;c.vr=0;c.roll=Math.atan2(Math.sin(c.roll),Math.cos(c.roll))*Math.exp(-6*dt)}
@@ -172,14 +215,35 @@ export class Race {
         const swing=Math.sin(c.phase)
         if(c.wobble>.3)spin(c,i,c.wobble*20,Math.sign(swing)||1,false,c.by)
         else{
-          c.yaw=c.vx*.018+c.wobble*swing;c.roll=c.wobble*.35*Math.sin(c.phase+1)
+          const heading=c.vx*.018+c.wobble*swing
+          c.yaw+=(heading-c.yaw)*(1-Math.exp(-7*dt))+c.spin*dt
+          c.spin*=Math.exp(-5*dt);c.roll=c.wobble*.35*Math.sin(c.phase+1)
           c.x+=c.wobble*Math.cos(c.phase)*dt*4
         }
       }
     }
     for(let i=0;i<this.cars.length;i++)for(let j=i+1;j<this.cars.length;j++){
       const a=this.cars[i], b=this.cars[j], ds=b.s-a.s, dx=b.x-a.x
-      if(Math.abs(ds)>=4.8 || Math.abs(dx)>=2.05 || Math.abs(a.h-b.h)>1.4)continue
+      // Each contact impulse cancels most of the closing speed within one tick.
+      // Held steering against a rear quarter still loads the leader over time.
+      if(i===0){
+        const onQuarter=ds>=1.8 && ds<=4.82 && Math.abs(dx)>=.95 && Math.abs(dx)<=2.07
+        const pressing=onQuarter && steer*dx>0 && !a.recovery && !b.recovery
+        if(pressing){
+          const pressure=(this.quarterPressure.get(b)??0)+dt*Math.abs(steer)
+          if(pressure>=.18){
+            spin(b,j,6,-Math.sign(dx),false,i)
+            this.quarterPressure.delete(b)
+          }else this.quarterPressure.set(b,pressure)
+        }else this.quarterPressure.delete(b)
+      }
+      if(Math.abs(a.h-b.h)>1.4)continue
+      if(a.recovery || b.recovery){
+        const strength=resolveWreck(a,b)
+        if(strength>.25)emit('bump',i,j,strength)
+        continue
+      }
+      if(Math.abs(ds)>=4.8 || Math.abs(dx)>=2.05)continue
       const sign=Math.sign(dx)||1, ahead=Math.sign(ds)||1
       const [rear,front,ri,fi]=ahead>0?[a,b,i,j]:[b,a,j,i]
       if(4.8-Math.abs(ds)<2.05-Math.abs(dx)){
@@ -201,18 +265,35 @@ export class Race {
           if(closing>2)emit('bump',ri,fi,closing)
         }
       }else{
-        // Side by side.
-        const push=(2.05-Math.abs(dx))*.5;a.x-=push*sign;b.x+=push*sign
-        const sideSpeed=(a.vx-b.vx)*sign
-        if(sideSpeed<=0)continue
-        a.vx-=sideSpeed*.8*sign;b.vx+=sideSpeed*.8*sign
-        if(sideSpeed>5&&Math.abs(ds)>1.8){
-          // Door into the rear quarter: the car ahead gets turned.
-          spin(front,fi,sideSpeed,front===b?sign:-sign,false,ri);shake(rear,.12,fi)
-        }else{
-          const loss=1-.004*sideSpeed;a.v*=loss;b.v*=loss
-          shake(a,sideSpeed*.035,j);shake(b,sideSpeed*.035,i)
-          emit('rub',i,j,sideSpeed)
+        // Correct overlap without adding rebound. A car pinned against the
+        // outside wall has no room to take its half of the correction.
+        const inside=sign>0?a:b, outside=sign>0?b:a
+        const overlap=2.05-Math.abs(dx)
+        const outward=Math.min(overlap*.5,Math.max(0,9-outside.x))
+        outside.x+=outward
+        inside.x-=overlap-outward
+
+        // Contact lies midway along the overlapping door panels. Yaw rate
+        // contributes lateral speed at that point, with opposite lever arms.
+        const arm=ds*.5
+        const drift=(c:Car)=>c.v*c.v*track(c.s).bend*.28
+        const closing=(a.vx+drift(a)-b.vx-drift(b)+(a.spin+b.spin)*arm)*sign
+        if(closing<=0)continue
+        const pinned=outside.x>=9
+        const inverseInertia=12/(4.8**2+2.05**2)
+        const impulse=closing/((pinned?1:2)+2*arm*arm*inverseInertia)
+        inside.vx-=impulse
+        if(!pinned)outside.vx+=impulse
+        // Sliding panels exchange a little longitudinal momentum. Matching
+        // speeds produce no drag, even when drivers lean on each other.
+        const friction=Math.sign(a.v-b.v)*Math.min(Math.abs(a.v-b.v)*.5,impulse*.16)
+        a.v-=friction;b.v+=friction
+        const rotation=(1.025*friction-arm*impulse)*sign*inverseInertia
+        a.spin+=rotation;b.spin+=rotation
+        if(closing>5&&Math.abs(ds)>1.8){
+          spin(front,fi,closing,Math.sign(rotation)||sign,false,ri)
+        }else if(closing>.15||Math.abs(friction)>.01){
+          emit('rub',i,j,closing)
         }
       }
     }

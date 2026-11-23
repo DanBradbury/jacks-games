@@ -49,7 +49,7 @@ export const numbers=[27,43,12,71,8,56,92,19,64,3]
 export interface Car {s:number; x:number; v:number; vx:number; yaw:number; spin:number; spinTarget:number; roll:number; vr:number; h:number; vh:number; recovery:number
   // Fishtail amplitude (radians) and its oscillator phase; contact cooldown; AI lane;
   // riding the wall; the car that last got this one loose (-1 for none).
-  wobble:number; phase:number; touch:number; lane:number; think:number; wall:boolean; by:number}
+  wobble:number; phase:number; touch:number; lane:number; think:number; passing:Car|null; defended:boolean; wall:boolean; by:number}
 // Square bump-drafting is clean, but rubbing and wall hits get a car loose, a loose
 // car that keeps getting hit spins, and a shot to the rear quarter turns it around.
 export interface Contact {kind:'rub'|'bump'|'scrape'|'grass'|'spin'; car:number; other:number; strength:number}
@@ -58,8 +58,13 @@ export function field(): Car[] {
   return colors.map((_,i)=>{
     const x=i?(i%2?-2.6:2.6):-2.6
     return {s:start+(i?30+Math.floor((i-1)/2)*12+(i%2)*3:0),x,v:i?78:76,vx:0,yaw:0,spin:0,spinTarget:0,roll:0,vr:0,h:0,vh:0,recovery:0,
-      wobble:0,phase:i,touch:0,lane:x,think:0,wall:false,by:-1}
+      wobble:0,phase:i,touch:0,lane:x,think:0,passing:null,defended:false,wall:false,by:-1}
   })
+}
+function tow(c:Car, leader:Car){
+  const gap=leader.s-c.s, offset=Math.abs(leader.x-c.x)
+  return gap>4.8 && gap<46 && offset<2.3 && !leader.recovery && !c.recovery
+    ? (1-gap/50)*(1-offset/2.6) : 0
 }
 // Project both rotated footprints onto each door and bumper normal. The
 // shallowest overlap gives the direction in which the bodies can separate.
@@ -114,7 +119,48 @@ export class Race {
     for(const o of this.cars)if(o!==c&&o.s>c.s&&o.s-c.s<range&&Math.abs(o.x-x)<2.4&&(!best||o.s<best.s))best=o
     return best
   }
-  clear(c:Car,x:number){return this.cars.every(o=>o===c||Math.abs(o.s-c.s)>9||Math.abs(o.x-x)>2.4)}
+  // Check the whole lane change, including where closing traffic will be in one second.
+  private openLine(c:Car,x:number,except?:Car){
+    const left=Math.min(x,c.x)-2.4, right=Math.max(x,c.x)+2.4
+    return this.cars.every(o=>{
+      if(o===c || o===except || o.x<left || o.x>right)return true
+      const gap=o.s-c.s, next=gap+o.v-c.v
+      return Math.min(gap,next)>7 || Math.max(gap,next)<-7
+    })
+  }
+  private planLine(c:Car,p:Car){
+    const gap=p.s-c.s, closing=c.v-p.v
+    if(gap>0 || gap < -48)c.defended=false
+    if(c.recovery){c.passing=null;return}
+    if(c.passing){
+      if(c.passing.s-c.s>=-7 && c.passing.s-c.s<32 && !c.passing.recovery)return
+      c.passing=null
+    }
+    if(c.think>0)return
+    c.think=.25
+    if(!p.recovery && !c.defended && gap < -8 && gap > -38 && closing < -1){
+      const cover=Math.max(lanes[0],Math.min(lanes[3],p.x+p.vx*.45))
+      if(Math.abs(cover-c.lane)>1 && (-gap-5)/-closing>1 && this.openLine(c,cover)){
+        c.lane=cover
+        c.defended=true
+        return
+      }
+    }
+    const front=this.ahead(c,c.x,32)
+    const rival=front ?? (!p.recovery && gap>5 && gap<46 ? p : undefined)
+    if(!rival)return
+    const lead=rival.s-c.s, gain=c.v-rival.v
+    if(gain>.7 && lead<12+Math.min(gain,18)*1.1){
+      const options=lanes.filter(x=>Math.abs(x-rival.x)>2.9
+        && (Math.abs(c.x-rival.x)<2.4 || (x-rival.x)*(c.x-rival.x)>0)
+        && this.openLine(c,x,rival)
+        && !this.ahead(c,x,lead+8))
+      options.sort((a,b)=>Math.abs(a-c.x)-Math.abs(b-c.x))
+      if(options.length){c.lane=options[0];c.passing=rival}
+    }else if(rival===p && lead>6+Math.max(0,gain) && p.x>=-8 && p.x<=8 && this.openLine(c,p.x,p)){
+      c.lane=p.x
+    }
+  }
   step(dt:number,steer:number,brake:boolean) {
     this.time+=dt
     this.events.length=0
@@ -134,11 +180,12 @@ export class Race {
     }
     const shake=(c:Car,amount:number,by=-1)=>{if(!c.recovery){c.wobble=Math.min(.5,c.wobble+amount);c.by=by}}
     const p=this.cars[0]
-    this.draft=this.cars.slice(1).reduce((best,c)=>{
-      const gap=c.s-p.s
-      return gap>4.8&&gap<46&&Math.abs(c.x-p.x)<2.3&&!c.recovery&&!p.recovery?
-        Math.max(best,(1-gap/50)*(1-Math.abs(c.x-p.x)/2.6)):best
-    },0)
+    const wakes=this.cars.map(c=>this.cars.reduce((best,o)=>Math.max(best,tow(c,o)),0))
+    this.draft=wakes[0]
+    for(const c of this.cars.slice(1)){
+      c.think-=dt
+      this.planLine(c,p)
+    }
     this.boost=Math.max(0,this.boost-dt)
     for(const [i,c] of this.cars.entries()){
       const troubled=c.recovery>0
@@ -147,24 +194,19 @@ export class Race {
       const slide=c.v*c.v*track(c.s).bend*.28
       let target:number, lateral:number, rate=troubled?.12:.55
       if(i){
-        // AI: hold a lane, draft the car ahead, and pull out to pass anything slower.
-        const cruise=78+Math.sin(i*.7)*1.1
-        target=cruise
-        const front=troubled?undefined:this.ahead(c,c.lane,32)
-        const chased=!troubled&&this.cars.some(o=>o!==c&&c.s-o.s>0&&c.s-o.s<12&&Math.abs(o.x-c.x)<2.4&&o.v>c.v+2)
-        c.think-=dt
-        if((front&&front.v<target-1||chased)&&c.think<=0){
-          c.think=.8
-          const k=lanes.indexOf(c.lane)
-          const options=[lanes[k-1],lanes[k+1]].filter(x=>x!==undefined&&this.clear(c,x)&&(!front||(this.ahead(c,x,32)?.s??Infinity)>front.s))
-          if(options.length)c.lane=options[Math.floor(c.s)%options.length]
-        }
-        if(front){
+        const cruise=79+Math.sin(i*.7)*1.1
+        target=cruise+wakes[i]*13
+        // Carry earned speed through the pass after leaving the wake.
+        if(c.passing && target<c.v)rate=.1
+        const front=this.ahead(c,c.x,20)
+        if(front && (front!==c.passing || Math.abs(c.lane-front.x)<2.9)){
           const gap=front.s-c.s
-          target+=(1-gap/32)*5
-          // Lift quickly when closing on the car ahead; a car that was just bumped
-          // from behind keeps its extra speed and eases back to cruise.
-          if(this.ahead(c,c.lane,32)===front&&gap<14){target=Math.min(target,front.v+(gap-9)*.6);if(target<c.v)rate=1.6}
+          if(gap<14){
+            // Allow a closing run while there is room between the bumpers.
+            const clearance=gap-4.8
+            target=Math.min(target,front.v+(clearance-.6)*1.5)
+            if(target<c.v)rate=1.6
+          }
         }
         lateral=(c.lane+Math.sin(this.time*.55+i)*.35-c.x)*1.5-slide
       }else{

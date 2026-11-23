@@ -49,3 +49,19 @@ for (const [gap, speed] of [[3, 87], [22, 75]]) {
   race.step(1/120, 0, false)
   assert.equal(rival.lane, 2.6, 'Traffic between lanes prevents a block')
 }
+
+// The rolling start should put the player in a useful tow without any input.
+{
+  const race = new Race()
+  const [player, leader] = race.cars
+  const openingGap = leader.s - player.s
+  const openingSpeed = player.v
+  assert.equal(openingSpeed, leader.v)
+  assert.ok(openingGap > 4.8 && race.draft > .7)
+  for (let tick = 0; tick < 600; tick++) {
+    race.step(1/120, 0, false)
+    assert.ok(race.draft > .5)
+    assert.equal(player.recovery, 0)
+  }
+  assert.ok(player.v > openingSpeed && leader.s - player.s < openingGap)
+}

@@ -1,11 +1,11 @@
 import { carModel, type Mark } from './car-model'
-import { colors, numbers, track, length, type Car } from './race'
+import { colors, numbers, track, length, spinDuration, type Car } from './race'
 type V = [number,number,number]
 type P = [number,number]
 type Frame = ReturnType<typeof track>
 function world(f:Frame,x:number,y:number):V{return [f.x+f.tz*x,y+x*f.bank,f.z-f.tx*x]}
 const crowd=['#d8bb83','#756957','#c77354','#6a8696','#b1a69a','#434f59']
-export function draw(ctx:CanvasRenderingContext2D,w:number,h:number,cars:Car[],focus:number,angle:number,boost:boolean,playerPaint:string,playerNumber:string){
+export function draw(ctx:CanvasRenderingContext2D,w:number,h:number,cars:Car[],focus:number,angle:number,playerPaint:string,playerNumber:string){
   const car=cars[focus], f=track(car.s)
   const cam=world(f,car.x+(angle===1?12:angle===2?-9:0),angle===1?8:angle===2?2.2:4.2)
   const behind=angle===1?8:angle===2?-9:10.8
@@ -14,7 +14,7 @@ export function draw(ctx:CanvasRenderingContext2D,w:number,h:number,cars:Car[],f
   aim[0]+=f.tx*(angle?0:10);aim[2]+=f.tz*(angle?0:10)
   const dx=aim[0]-cam[0], dz=aim[2]-cam[2], d=Math.hypot(dx,dz)
   const sx=dx/d,sz=dz/d,pitch=Math.atan2(aim[1]-cam[1],d),co=Math.cos(pitch),si=Math.sin(pitch)
-  const lens=Math.min(h*.99,w*1.05)*(boost?.95:1)
+  const lens=Math.min(h*.99,w*1.05)
   const cy=h*(w<h?.51:.49)
   // Camera space is [right, up, depth]. Polygons are clipped at the near plane so
   // quads that straddle the camera stay on screen instead of popping out.
@@ -116,6 +116,37 @@ export function draw(ctx:CanvasRenderingContext2D,w:number,h:number,cars:Car[],f
   jobs.length=0
   cars.forEach((c,i)=>{
     const g=track(c.s),origin=world(g,c.x,0),dc=depth(origin)
+    // Derive particle ages from the recorded spin so both replay angles show the same wreck.
+    if(c.recovery>0 && Math.abs(c.s-car.s)<140){
+      const age=spinDuration-c.recovery
+      for(let n=0;n<24;n++){
+        const t=age-n*.09
+        if(t<0 || t>1.05)continue
+        const side=n%2?1:-1
+        const trail=track(c.s-1.7-t*c.v*.45)
+        const center=world(trail,c.x+side*(.8+t*.7)+Math.sin(n*7+i)*t,.32+t*1.6)
+        const camera=view(center)
+        if(camera[2]<1)continue
+        const [x,y]=screen(camera), radius=(.32+t*1.4)*lens/camera[2]
+        jobs.push({depth:depth(center),paint:()=>{
+          const smoke=ctx.createRadialGradient(x,y,0,x,y,radius)
+          smoke.addColorStop(0,`rgba(224,222,211,${.52*(1-t/1.05)})`)
+          smoke.addColorStop(1,'rgba(184,185,180,0)')
+          ctx.fillStyle=smoke;ctx.fillRect(x-radius,y-radius,radius*2,radius*2)
+        }})
+      }
+      for(let n=0;n<20;n++){
+        const t=age-(n%5)*.045
+        if(t<0 || t>.55)continue
+        const direction=n*2.4+i, vx=Math.cos(direction)*(4+n%7)
+        const point=(time:number)=>world(track(c.s-1-time*(8+n%6)),
+          c.x+Math.cos(direction)+vx*time,.18+Math.max(0,time*(3+n%4-10*time)))
+        const head=point(t),tail=point(Math.max(0,t-.045)),dist=view(head)[2]
+        if(dist<1)continue
+        jobs.push({depth:depth(head),paint:()=>line(tail,head,n%3?'#ffc356':'#fff5ba',
+          Math.max(.6,Math.min(3,.045*lens/dist))*(1-.75*t/.55))})
+      }
+    }
     if(dc<1)return
     jobs.push({depth:dc,paint:()=>{
       const sin=Math.sin(c.yaw),cos=Math.cos(c.yaw),sr=Math.sin(c.roll),cr=Math.cos(c.roll)

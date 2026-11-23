@@ -46,19 +46,20 @@ export function track(s: number) {
 }
 export const colors=['#ff5c25','#4899c2','#f5be33','#e9e4d3','#bc3842','#57ac90','#bc86ca','#477bd0','#ef9442','#cee256']
 export const numbers=[27,43,12,71,8,56,92,19,64,3]
-export interface Car {s:number; x:number; v:number; vx:number; yaw:number; spin:number; spinTarget:number; roll:number; vr:number; h:number; vh:number; recovery:number
+export interface Car {s:number; x:number; v:number; vx:number; yaw:number; spin:number; spinTarget:number; roll:number; vr:number; h:number; vh:number; recovery:number; rejoining:boolean
   // Fishtail amplitude (radians) and its oscillator phase; contact cooldown; AI lane;
   // riding the wall; the car that last got this one loose (-1 for none).
-  wobble:number; phase:number; touch:number; lane:number; think:number; passing:Car|null; defended:boolean; wall:boolean; by:number}
+  wobble:number; phase:number; touch:number; lane:number; think:number; passing:Car|null; defended:boolean; wall:boolean; by:number; hitSide:number}
 // Square bump-drafting is clean, but rubbing and wall hits get a car loose, a loose
 // car that keeps getting hit spins, and a shot to the rear quarter turns it around.
+export const spinDuration=4
 export interface Contact {kind:'rub'|'bump'|'scrape'|'grass'|'spin'; car:number; other:number; strength:number}
 const lanes=[-6.4,-2.6,2.6,6.4]
 export function field(): Car[] {
   return colors.map((_,i)=>{
     const x=i?(i%2?-2.6:2.6):-2.6
-    return {s:start+(i?30+Math.floor((i-1)/2)*12+(i%2)*3:0),x,v:i?78:76,vx:0,yaw:0,spin:0,spinTarget:0,roll:0,vr:0,h:0,vh:0,recovery:0,
-      wobble:0,phase:i,touch:0,lane:x,think:0,passing:null,defended:false,wall:false,by:-1}
+    return {s:start+(i?6+Math.floor((i-1)/2)*12+(i%2)*3:0),x,v:78,vx:0,yaw:0,spin:0,spinTarget:0,roll:0,vr:0,h:0,vh:0,recovery:0,rejoining:false,
+      wobble:0,phase:i,touch:0,lane:x,think:0,passing:null,defended:false,wall:false,by:-1,hitSide:0}
   })
 }
 function tow(c:Car, leader:Car){
@@ -105,14 +106,11 @@ function resolveWreck(a:Car,b:Car){
 export class Race {
   cars=field()
   time=0
-  fuel=1
-  boost=0
-  draft=0
+  draft=this.cars.reduce((best,c)=>Math.max(best,tow(this.cars[0],c)),0)
   place=10
   finished=false
   events:Contact[]=[]
   private quarterPressure = new Map<Car, number>()
-  ignite(){if(this.fuel && !this.finished && !this.cars[0].recovery){this.fuel=0;this.boost=3;return true}return false}
   // Nearest healthy-or-not car ahead of `c` within `range` metres around lateral position `x`.
   ahead(c:Car,x:number,range:number){
     let best:Car|undefined
@@ -170,15 +168,27 @@ export class Race {
       if(kind!=='spin'&&c.touch>0)return
       c.touch=.2;this.events.push({kind,car,other,strength})
     }
-    const spin=(c:Car,index:number,force:number,side:number,trip:boolean,by=-1)=>{
+    const spin=(c:Car,index:number,force:number,side:number,trip:boolean,by:number,pushSide:number)=>{
       if(c.recovery>0)return
-      c.spinTarget=side*(2.8+force*.18); c.recovery=2.4; c.wobble=0
+      c.spinTarget=side*(2.8+force*.18); c.recovery=spinDuration; c.rejoining=true; c.wobble=0
+      // Deflect the velocity vector away from contact. The body can rotate
+      // the opposite way when its rear quarter is pushed sideways.
+      const angle=pushSide*Math.min(.17,force*.012)
+      const forward=c.v
+      c.v=forward*Math.cos(angle)-c.vx*Math.sin(angle)
+      c.vx=c.vx*Math.cos(angle)+forward*Math.sin(angle)
       if(trip){c.vh=6.8; c.vr=side*4.55}
-      emit('spin',index,-1,force)
+      emit('spin',index,by,force)
       // Only replay crashes the player is part of.
       if((index===0||by===0)&&(incident<0||index===0))incident=index
     }
-    const shake=(c:Car,amount:number,by=-1)=>{if(!c.recovery){c.wobble=Math.min(.5,c.wobble+amount);c.by=by}}
+    const shake=(c:Car,amount:number,by=-1,hitSide=0)=>{
+      if(!c.recovery){
+        c.wobble=Math.min(.5,c.wobble+amount)
+        c.by=by
+        c.hitSide=by>=0?Math.sign(c.x-this.cars[by].x):hitSide
+      }
+    }
     const p=this.cars[0]
     const wakes=this.cars.map(c=>this.cars.reduce((best,o)=>Math.max(best,tow(c,o)),0))
     this.draft=wakes[0]
@@ -186,13 +196,12 @@ export class Race {
       c.think-=dt
       this.planLine(c,p)
     }
-    this.boost=Math.max(0,this.boost-dt)
     for(const [i,c] of this.cars.entries()){
       const troubled=c.recovery>0
       c.touch=Math.max(0,c.touch-dt)
       // Momentum carries cars up the track in the turns; drivers steer against it.
       const slide=c.v*c.v*track(c.s).bend*.28
-      let target:number, lateral:number, rate=troubled?.12:.55
+      let target:number, lateral:number, rate=.55
       if(i){
         const cruise=79+Math.sin(i*.7)*1.1
         target=cruise+wakes[i]*13
@@ -210,27 +219,32 @@ export class Race {
         }
         lateral=(c.lane+Math.sin(this.time*.55+i)*.35-c.x)*1.5-slide
       }else{
-        target=brake?49:80+this.draft*10+(this.boost?24:0)
-        if(this.boost&&!troubled)rate=1.5
+        target=brake?49:80+this.draft*10
         lateral=steer*10.8*(1-c.wobble*.5)
       }
       if(troubled){
         // Sliding tires scrub speed progressively as the body turns broadside.
         const scrub=2+12*Math.abs(Math.sin(c.yaw))
         c.v=Math.max(0,c.v-scrub*dt)
-      }else c.v+=(target-c.v)*dt*rate
-      c.vx+=(lateral-c.vx)*dt*(troubled?.5:3.2)
+        c.vx*=Math.exp(-.65*dt)
+      }else{
+        // A slow car needs time to rebuild speed after a wreck.
+        const acceleration=(target-c.v)*rate
+        c.v+=(c.rejoining?Math.min(6.5,acceleration):acceleration)*dt
+        if(c.v>=75)c.rejoining=false
+        c.vx+=(lateral-c.vx)*dt*3.2
+      }
       if(c.x<8.6)c.wall=false
       c.x+=(c.vx+slide)*dt; c.s+=c.v*dt
       if(c.x>9){
-        // The wall is on the outside only. The first touch is a hit (a hard boosted one
+        // The wall is on the outside only. The first touch is a hit (a hard high-speed one
         // spins); after that the car slides along it and steering away drives it off.
         const impact=c.vx+slide
         c.x=9
         if(c.vx>0)c.vx=0
         if(!c.wall){c.wall=true
-          if(impact>10.2&&c.v>84)spin(c,i,impact,-1,false)
-          else{c.v-=impact*.2;shake(c,impact*.015);emit('scrape',i,-1,impact)}
+          if(impact>10.2&&c.v>84)spin(c,i,impact,-1,false,-1,-1)
+          else{c.v-=impact*.2;shake(c,impact*.015,-1,-1);emit('scrape',i,-1,impact)}
         }else{c.v-=dt*10;emit('scrape',i,-1,1)}
       }
       // Inside the yellow lines: the apron is a little slower, the infield grass is
@@ -249,13 +263,19 @@ export class Race {
         c.h+=c.vh*dt;c.vh-=9.81*dt
         if(c.h>0){c.roll+=c.vr*dt}
         else {c.h=0;c.vh=0;c.vr=0;c.roll=Math.atan2(Math.sin(c.roll),Math.cos(c.roll))*Math.exp(-6*dt)}
-        if(c.recovery<.9)c.yaw=Math.atan2(Math.sin(c.yaw),Math.cos(c.yaw))*Math.exp(-6*dt)
+        // Let the spin settle before the driver can point downtrack again.
+        // Limit the turn rate even when the car ends up facing backwards.
+        if(c.recovery<spinDuration/2){
+          const heading=Math.atan2(Math.sin(c.yaw),Math.cos(c.yaw))
+          const correction=Math.min(Math.abs(heading),1.85*dt)
+          c.yaw=heading-Math.sign(heading)*correction
+        }
       }else{
         // A loose car fishtails: the tail swings, the body rocks and the line wanders.
         // Past the limit the tail comes all the way around.
         c.phase+=dt*11;c.wobble*=Math.exp(-1.3*dt)
         const swing=Math.sin(c.phase)
-        if(c.wobble>.3)spin(c,i,c.wobble*20,Math.sign(swing)||1,false,c.by)
+        if(c.wobble>.3)spin(c,i,c.wobble*20,Math.sign(swing)||1,false,c.by,c.hitSide)
         else{
           const heading=c.vx*.018+c.wobble*swing
           c.yaw+=(heading-c.yaw)*(1-Math.exp(-7*dt))+c.spin*dt
@@ -274,7 +294,7 @@ export class Race {
         if(pressing){
           const pressure=(this.quarterPressure.get(b)??0)+dt*Math.abs(steer)
           if(pressure>=.18){
-            spin(b,j,6,-Math.sign(dx),false,i)
+            spin(b,j,6,-Math.sign(dx),false,i,Math.sign(dx))
             this.quarterPressure.delete(b)
           }else this.quarterPressure.set(b,pressure)
         }else this.quarterPressure.delete(b)
@@ -295,8 +315,9 @@ export class Race {
         if(closing<=0)continue
         if(closing>7&&offset>.8){
           // Clipped the rear corner hard enough to hook the car ahead around.
-          spin(front,fi,closing,rear.x<front.x?1:-1,false,ri)
-          if(closing>20&&offset>1.4)spin(rear,ri,closing,rear.x<front.x?-1:1,true,fi)
+          const away=Math.sign(front.x-rear.x)
+          spin(front,fi,closing,away,false,ri,away)
+          if(closing>20&&offset>1.4)spin(rear,ri,closing,-away,true,fi,-away)
           else shake(rear,.12,fi)
           const share=closing*.4;rear.v-=share;front.v+=share
         }else{
@@ -333,7 +354,7 @@ export class Race {
         const rotation=(1.025*friction-arm*impulse)*sign*inverseInertia
         a.spin+=rotation;b.spin+=rotation
         if(closing>5&&Math.abs(ds)>1.8){
-          spin(front,fi,closing,Math.sign(rotation)||sign,false,ri)
+          spin(front,fi,closing,Math.sign(rotation)||sign,false,ri,Math.sign(front.x-rear.x))
         }else if(closing>.15||Math.abs(friction)>.01){
           emit('rub',i,j,closing)
         }

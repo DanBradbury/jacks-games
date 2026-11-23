@@ -42,24 +42,18 @@ function action(){
   else if(mode==='replay')resumeRace()
 }
 el('action').onclick=action;el('pause').onclick=togglePause
-function control(id:string){
-  sound.unlock()
-  if(mode!=='race'||manualPause||hostPause)return
-  if(id==='boost'){if(race.ignite())sound.whoosh()}else sound.tick()
-}
-for(const id of ['left','right','brake','boost']){
+for(const id of ['left','right','brake']){
   const btn=el(id)
-  btn.onpointerdown=e=>{e.preventDefault();btn.setPointerCapture(e.pointerId);pointers.set(e.pointerId,id);btn.classList.add('pressed');control(id)}
+  btn.onpointerdown=e=>{e.preventDefault();btn.setPointerCapture(e.pointerId);pointers.set(e.pointerId,id);btn.classList.add('pressed');sound.unlock()}
   btn.onlostpointercapture=e=>{pointers.delete(e.pointerId);btn.classList.toggle('pressed',active(id))}
-  btn.onclick=e=>{if(e.detail===0)control(id)}
+  btn.onclick=e=>{if(e.detail===0)sound.unlock()}
 }
-const keys:Record<string,string>={ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',ArrowDown:'brake',KeyS:'brake',Space:'boost'}
+const keys:Record<string,string>={ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',ArrowDown:'brake',KeyS:'brake'}
 window.onkeydown=e=>{
   if(garage.dialog.open)return
   if(e.code==='Escape'&&!e.repeat){togglePause();return}
-  if(e.code==='Space'&&document.activeElement instanceof HTMLButtonElement&&mode!=='race')return
   const id=keys[e.code];if(!id)return;e.preventDefault()
-  if(!e.repeat){held.add(id);control(id)}
+  if(!e.repeat){held.add(id);sound.unlock()}
 }
 window.onkeyup=e=>held.delete(keys[e.code])
 window.addEventListener('blur',clearInput)
@@ -77,9 +71,15 @@ function finish(){
 let spots:([number,number]|null)[]=[]
 const sparks=['#ffe38a','#ffb547','#fff7d9'],dirt=['#7e9164','#a08a5c','#5f6e4a']
 function contact(e:Contact){
-  if(e.kind==='spin')return
   const cars=race.cars,near=e.car===0||e.other===0||Math.abs(cars[e.car].s-cars[0].s)<40
   if(!near)return
+  if(e.kind==='spin'){
+    const level=Math.min(1,.45+e.strength/30)*(e.car===0||e.other===0?1:.78)
+    sound.tone(79,.27,{slide:38,gain:.42*level})
+    sound.noise(.18,{freq:1900,sweep:380,gain:.65*level})
+    sound.noise(.42,{delay:.08,freq:1050,sweep:190,q:.7,gain:.43*level})
+    return
+  }
   const at=spots[e.car]
   if(e.kind==='grass'){
     if(at)particles.burst(at[0],at[1]+14,{count:5,colors:dirt,speed:120,size:6,life:.4,gravity:600,shape:'dot'})
@@ -89,11 +89,11 @@ function contact(e:Contact){
   if(at)particles.burst(at[0],at[1]+8,{count:e.kind==='bump'?6:10,colors:sparks,speed:180,size:5,life:.35,gravity:500,shape:'dot'})
   if(e.kind==='rub')sound.noise(.14,{freq:2400,sweep:1300,gain:.22,q:2})
   else if(e.kind==='scrape')sound.noise(.2,{freq:3200,sweep:1600,gain:.18,q:2})
-  else{sound.tone(95,.18,{type:'square',slide:55,gain:.28});sound.noise(.12,{freq:320,gain:.3})}
+  else{sound.tone(95,.18,{type:'sine',slide:44,gain:.28});sound.noise(.12,{freq:320,gain:.3})}
 }
 function simulate(){
   const incident=race.step(1/120,Number(active('right'))-Number(active('left')),active('brake'))
-  if(incident>=0&&focus<0){focus=incident;post=1.6;sound.noise(.45,{freq:530,sweep:100,gain:.5})}
+  if(incident>=0&&focus<0){focus=incident;post=1.6}
   for(const e of race.events)contact(e)
   if(++ticks%5===0){frames.push(race.cars.map(c=>({...c})));if(frames.length>70)frames.shift()}
   if(focus>=0&&(post-=1/120)<=0){
@@ -112,22 +112,27 @@ function render(){
   ctx.setTransform(dpr,0,0,dpr,0,0)
   const replay=mode==='replay',angle=replay?(playTime<clipDuration()?1:2):0
   const cars=replay?frames[Math.min(frames.length-1,Math.floor((playTime%clipDuration())*24*.65))]:race.cars
-  spots=draw(ctx,w,h,cars,replay?focus:0,angle,mode==='race'&&race.boost>0,garage.car.paint,garage.car.number);mini(cars);particles.draw(ctx)
+  spots=draw(ctx,w,h,cars,replay?focus:0,angle,garage.car.paint,garage.car.number);mini(cars);particles.draw(ctx)
   const place=1+cars.slice(1).filter(c=>c.s>cars[0].s).length
   el('place').innerHTML=place+'<span>/10</span>';el('laps').textContent=String(Math.max(0,2-Math.floor(cars[0].s/length))).padStart(2,'0')
   el('mph').textContent=String(Math.round(cars[0].v*2.237))
-  el('status').textContent=manualPause?'PAUSED':replay?'INSTANT REPLAY':mode==='grid'?'ROLLING START':mode==='finish'?'CHECKERED FLAG':race.boost?'BOOST ACTIVE':race.draft>.14?'DRAFTING':cars[0].s>=length?'FINAL LAP':'GREEN FLAG'
+  el('status').textContent=manualPause?'PAUSED':replay?'INSTANT REPLAY':mode==='grid'?'ROLLING START':mode==='finish'?'CHECKERED FLAG':race.draft>.14?'DRAFTING':cars[0].s>=length?'FINAL LAP':'GREEN FLAG'
   ;(el('wake') as HTMLMeterElement).value=race.draft
-  const button=el('boost') as HTMLButtonElement;button.disabled=mode!=='race'||!race.fuel||manualPause
-  button.textContent=race.fuel?'ϟ  BOOST':race.boost?'ϟ  ACTIVE':'ϟ  SPENT'
   const pause=el('pause') as HTMLButtonElement;pause.disabled=mode==='grid'||mode==='finish';pause.textContent=manualPause?'▶':'Ⅱ';pause.ariaLabel=manualPause?'Resume race':'Pause race'
+}
+const tireNoise={type:'bandpass' as const,freq:950,q:.8,gain:.20}
+function tireSound(){
+  const car=race.cars[0]
+  const level=mode==='race' ? Math.min(1,car.v/85)*Math.min(1,
+    Math.abs(car.vx)*.055+(active('brake')?.52:0)+Math.abs(car.spin)*.55) : 0
+  sound.setScratch(level,tireNoise)
 }
 function loop(now:number){
   const dt=Math.min(.1,(now-last)/1000);last=now
   if(!manualPause&&!hostPause){
     if(mode==='race'){accumulator+=dt;while(accumulator>=1/120&&mode==='race'){simulate();accumulator-=1/120}}
     else{accumulator=0;if(mode==='replay'){const before=playTime;playTime+=dt;if(playTime>=2*clipDuration())resumeRace();else if(before<clipDuration()&&playTime>=clipDuration())replayPanel()}}
-    particles.update(dt)
+    tireSound();particles.update(dt)
   }
   render();requestAnimationFrame(loop)
 }

@@ -2,6 +2,8 @@
 // back-to-front (later parts hide earlier ones); `order` is the coloring order.
 import { C, circle, ellipse, n, rect, rrect, type ColorTool, type Level } from './levels';
 
+import { robotAndTreatSheets } from './robot-and-treat-pages';
+
 interface Part {
   id: string;
   d: string;
@@ -366,4 +368,8 @@ export const PAGES: Level[] = [
     [...new Set(parts.map(part => part.color))], tool,
   )),
   ...Array.from({ length: 10 }, (_, i) => buddy(i + 1)),
+  ...robotAndTreatSheets.map(({ id, name, parts }) => page(
+    id, name, 320, 320, parts, parts.map(part => part.id).reverse(),
+    [...new Set(parts.map(part => part.color))], 'marker',
+  )),
 ];

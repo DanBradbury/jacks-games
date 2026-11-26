@@ -1,0 +1,20 @@
+{
+  "name": "@jack-games/last-fill",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "render:film": "node scripts/render-film.mjs",
+    "build": "vite build --base=./",
+    "package": "npm run build && node ../../scripts/package-game.mjs .",
+    "serve": "npm run build && go run server.go"
+  },
+  "dependencies": {
+    "@jack-games/kit": "*",
+    "three": "0.180.0"
+  },
+  "devDependencies": {
+    "playwright-core": "1.64.1"
+  }
+}

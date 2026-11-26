@@ -29,6 +29,7 @@ scripts/
 npm install
 npm run dev:coloring                      # dev server (also reachable from a phone on your LAN)
 npm run dev:dice-dungeon
+npm run dev:last-fill                    # first-person Three.js gas station short
 npm run package -w @jack-games/coloring   # typecheck + build + zip → games/coloring/release/
 ```
 

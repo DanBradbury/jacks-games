@@ -13,6 +13,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "deploy:coloring": "npm run deploy -w @jack-games/coloring",
     "deploy:dice-dungeon": "npm run deploy -w @jack-games/dice-dungeon",
+    "deploy:stock-car": "npm run deploy -w @jack-games/stock-car",
     "dev:stock-car": "npm run dev -w @jack-games/stock-car"
   },
   "devDependencies": {

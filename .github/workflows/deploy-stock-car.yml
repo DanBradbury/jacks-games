@@ -1,0 +1,20 @@
+# Deploys only when this game (or code it bundles) changes on main.
+name: Deploy stock-car
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - games/stock-car/**
+      - packages/kit/**
+      - tsconfig.base.json
+      - .github/workflows/deploy-stock-car.yml
+      - .github/workflows/deploy-game.yml
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy-game.yml
+    with:
+      game: stock-car
+    secrets: inherit

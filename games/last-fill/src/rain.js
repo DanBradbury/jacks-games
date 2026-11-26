@@ -22,11 +22,12 @@ function waterMesh(parent,geometry,shader){
 
 // Adhering water stays in pane coordinates as the door swings. A few larger
 // beads slide down winding tracks and refract the moving scene behind them.
-export function wetPane(parent,x,y,z,w,h,seedOffset,clock,optics){
-  const pane=waterMesh(parent,new T.PlaneGeometry(w,h),{
+export function wetPane(parent,x,y,z,w,h,seedOffset,clock,optics,carPane){
+  const pane=waterMesh(parent,carPane??new T.PlaneGeometry(w,h),{
+    defines:carPane?{SHELTERED_PANE:1}:{},
     uniforms:{...optics,clock,seedOffset:{value:seedOffset}},
     vertexShader:`varying vec2 panePoint;
-      void main(){panePoint=position.xy;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+      void main(){panePoint=${carPane?'uv':'position.xy'};gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
     fragmentShader:opticsShader+`
       uniform float clock,seedOffset;varying vec2 panePoint;
       float hash(vec2 p){vec3 q=fract(p.xyx*vec3(.1031,.1030,.0973));q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
@@ -73,6 +74,12 @@ export function wetPane(parent,x,y,z,w,h,seedOffset,clock,optics){
         if(gl_FragCoord.z>texture2D(surfaceDepth,uv).r)discard;
         vec2 p=panePoint+vec2(seedOffset,0.);
         vec3 beads=bead(p,vec2(.027,.032),0.);
+        #ifdef SHELTERED_PANE
+        // Residual water on the parked car collects near seals and outside the
+        // wiped field. Scale to real millimetres on each curved, moving pane.
+        float edge=(1.-smoothstep(.015,.17,panePoint.y));
+        if(hash(floor(p/vec2(.027,.032))+3.14)>.15+.40*edge)discard;
+        #else
         float lane=floor(p.x/.086);
         float pace=clock*(.039+.056*hash(vec2(lane,7.)));
         vec2 track=p+vec2(.0028*sin(p.y*31.+lane)+.0011*sin(p.y*56.+lane),pace+.008*sin(9.*pace+lane));
@@ -80,13 +87,18 @@ export function wetPane(parent,x,y,z,w,h,seedOffset,clock,optics){
         if(moving.z>beads.z)beads=moving;
         vec3 fresh=impact(p);
         if(fresh.z>beads.z)beads=fresh;
+        #endif
         // Map the physical direction of the pane's surface slope into screen UV.
         vec2 dx=dFdx(p),dy=dFdy(p);
         if(beads.z<.01)discard;
         vec2 slope=vec2(dot(beads.xy,dx),dot(beads.xy,dy))/max(max(length(dx),length(dy)),.00001);
         vec3 light=bentLight(uv,-slope*vec2(resolution.y/resolution.x,1.)*.038);
         light=light*(1.-.21*dot(beads.xy,beads.xy))+.13*pow(clamp(-beads.y,0.,1.),4.);
+        #ifdef SHELTERED_PANE
+        gl_FragColor=vec4(light,.38*beads.z);
+        #else
         gl_FragColor=vec4(light,.78*beads.z);
+        #endif
       }`
   });
   pane.position.set(x,y,z);

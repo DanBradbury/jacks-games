@@ -1,6 +1,8 @@
 import * as T from 'three';
 
 export const waterLayer=1;
+// Playback camera includes reflection surfaces. Their secondary cameras render layer 0.
+export const reflectionLayer=2;
 
 // Scatter only bright sources into adjacent pixels. Work in scene-linear light so
 // the white tubes and lightning contribute more than gray sky or wet concrete.

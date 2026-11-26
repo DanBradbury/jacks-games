@@ -1,5 +1,5 @@
 import * as T from 'three';
-import {group,mesh,mat,rubber,box,paint,seed} from './geometry.js';
+import {group,mesh,mat,rubber,box,paint,seed,panel} from './geometry.js';
 
 const smooth=T.MathUtils.smoothstep;
 const stations=[[-2.32,.826,.747],[-2.20,.888,.812],[-1.74,.929,.879],[-1.35,.955,.91],
@@ -120,15 +120,20 @@ export function lacquer(){
   return finish;
 }
 
-export function bodyShell(car,finish){
+export function bodyShell(car,door,finish){
   const positions=[],uv=[],indices=[],across=80,sideSteps=12,row=across+1+2*sideSteps;
+  const doorIndices=[],rearJamb=-.775,frontJamb=.55;
+  const rows=Array.from({length:149},(_,i)=>curve.getPoint(i/148));
+  const openingRear=-.669,openingFront=-.451,shoulderColumns=3;
+  rows.push(atZ(rearJamb),atZ(frontJamb),atZ(openingRear),atZ(openingFront));rows.sort((a,b)=>a.x-b.x);
+  const firstMovingColumn=sideSteps+72,lastMovingColumn=row-3;
   function vertex(x,y,z){
     positions.push(x,y,z);
     uv.push(6.2*(x+.52*z),6.2*(y+.77*z));
   }
   function quad(a,b,c,d){indices.push(a,b,c,a,c,d)}
-  for(let i=0;i<=148;i++){
-    const {x:z,y:w,z:h}=curve.getPoint(i/148),sill=sillY(z);
+  for(let i=0;i<rows.length;i++){
+    const {x:z,y:w,z:h}=rows[i],sill=sillY(z);
     function side(s,t){
       const x=s*sideWidth(t,z,w),y=T.MathUtils.lerp(sill,deckY(1,z,h),t);
       vertex(x,y,bodyZ(x,y,z,w));
@@ -140,14 +145,21 @@ export function bodyShell(car,finish){
     }
     for(let j=sideSteps-1;j>=0;j--)side(1,j/sideSteps);
     if(i)for(let j=1;j<row;j++){
-      const k=i*row+j;quad(k-row-1,k-1,k,k-row);
+      const k=i*row+j;
+      const midZ=(rows[i-1].x+z)/2;
+      const deckColumn=j-sideSteps;
+      const onShoulder=(deckColumn>0&&deckColumn<=shoulderColumns)||(deckColumn>across-shoulderColumns&&deckColumn<=across);
+      if(onShoulder&&midZ>openingRear&&midZ<openingFront)continue;
+      if(midZ>rearJamb&&midZ<frontJamb&&j>firstMovingColumn&&j<=lastMovingColumn)
+        doorIndices.push(k-row-1,k-1,k,k-row-1,k,k-row);
+      else quad(k-row-1,k-1,k,k-row);
     }
   }
   // Close both ends on the perimeter of the deck and quarter panels. Sample
   // the recessed stampings between those edges without overlapping bodywork.
   function closeEnd(front){
     const [z,w,h]=front?stations.at(-1):stations[0],sill=sillY(z),levels=48;
-    const first=front?148*row:0;
+    const first=front?(rows.length-1)*row:0;
     let above=Array.from({length:across+1},(_,j)=>first+sideSteps+j);
     for(let k=1;k<=levels;k++){
       const t=1-k/levels,below=[];
@@ -173,7 +185,37 @@ export function bodyShell(car,finish){
   const g=new T.BufferGeometry();
   g.setAttribute('position',new T.Float32BufferAttribute(positions,3));
   g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));
-  g.setIndex(indices);g.computeVertexNormals();mesh(car,g,finish);
+  // Compute normals across the closed envelope so the shut door continues
+  // the reflections on the adjoining fender. Only then separate the skins.
+  g.setIndex([...indices,...doorIndices]);g.computeVertexNormals();
+  const leaf=g.clone();leaf.setIndex(doorIndices);g.setIndex(indices);
+  mesh(car,g,finish);mesh(door,leaf,finish);
+  const seal=mat(0x322d2b,{roughness:.8,side:T.DoubleSide});
+  const first=rows.findIndex(p=>Math.abs(p.x-rearJamb)<.0001);
+  const last=rows.findIndex(p=>Math.abs(p.x-frontJamb)<.0001);
+  const perimeter=[];
+  for(let i=first;i<=last;i++)perimeter.push(i*row+firstMovingColumn);
+  for(let j=firstMovingColumn+1;j<=lastMovingColumn;j++)perimeter.push(last*row+j);
+  for(let i=last-1;i>=first;i--)perimeter.push(i*row+lastMovingColumn);
+  for(let j=lastMovingColumn-1;j>=firstMovingColumn;j--)perimeter.push(first*row+j);
+  const point=i=>positions.slice(i*3,i*3+3);
+  for(let i=0;i<perimeter.length;i++){
+    const a=point(perimeter[i]),b=point(perimeter[(i+1)%perimeter.length]);
+    const inner=p=>[p[0]-.061,p[1],p[2]];
+    panel(door,[a,b,inner(b),inner(a)],seal);
+  }
+  // Give each insert the exact cut edges of the tessellated shoulder.
+  const start=rows.findIndex(p=>Math.abs(p.x-openingRear)<.0001);
+  const end=rows.findIndex(p=>Math.abs(p.x-openingFront)<.0001);
+  return [-1,1].map(side=>{
+    const lo=sideSteps+(side<0?0:across-shoulderColumns),hi=lo+shoulderColumns;
+    const edge=[];
+    for(let j=lo;j<hi;j++)edge.push(start*row+j);
+    for(let i=start;i<end;i++)edge.push(i*row+hi);
+    for(let j=hi;j>lo;j--)edge.push(end*row+j);
+    for(let i=end;i>start;i--)edge.push(i*row+lo);
+    return edge.map(i=>new T.Vector3(...point(i)));
+  });
 }
 
 // Molded acrylic lenses have a smooth outer dome over concentric optical

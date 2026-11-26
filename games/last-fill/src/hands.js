@@ -1,5 +1,6 @@
 import * as T from 'three';
 import {group,mat,seed,smooth} from './geometry.js';
+import {carGrip} from './car-grip.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import leftModel from './left.glb?url';
 import rightModel from './right.glb?url';
@@ -39,7 +40,7 @@ function jacketSleeve(hand,s,cloth){
   g.computeVertexNormals();hand.add(new T.Mesh(g,cloth));
 }
 
-export async function hands(scene,doors){
+export async function hands(scene,doors,car,pulls){
   const [left,right,map,relief]=await Promise.all([
     new GLTFLoader().loadAsync(leftModel),new GLTFLoader().loadAsync(rightModel),
     new T.TextureLoader().loadAsync(skinMap),new T.TextureLoader().loadAsync(skinResponse)
@@ -51,7 +52,7 @@ export async function hands(scene,doors){
   const arms=[left,right].map((model,i)=>{
     const s=i===0?-1:1,hand=group(scene);
     let surface;model.scene.traverse(o=>{if(o.isSkinnedMesh)surface=o});
-    const g=surface.geometry,p=g.attributes.position,uv=g.attributes.uv;
+    const g=surface.geometry.clone(),p=g.attributes.position,uv=g.attributes.uv;
     const relaxed=p.clone();
     for(let j=0;j<p.count;j++){
       const x=p.getX(j),y=p.getY(j),z=p.getZ(j);
@@ -62,19 +63,23 @@ export async function hands(scene,doors){
       p.setX(j,across);
       const finger=smooth(.024,.124,-y);
       relaxed.setXYZ(j,across-s*.028*finger*finger,y+.013*finger*finger,z);
+
     }
     g.computeVertexNormals();
     g.morphAttributes.position=[relaxed];
+    surface.geometry.setAttribute('uv',uv);
+    const animateGrip=carGrip(scene,surface,s,skin,cloth,car,i?pulls.outside:pulls.inside);
     const palm=new T.Mesh(g,skin);
     const axes=new T.Matrix4().makeBasis(new T.Vector3(0,0,s),new T.Vector3(0,-1,0),new T.Vector3(s,0,0));
     palm.quaternion.setFromRotationMatrix(axes);
     palm.position.set(-s*.009,.008,-.039);hand.add(palm);
     jacketSleeve(hand,s,cloth);
-    hand.visible=false;return {hand,palm,door:doors[i],s};
+    hand.visible=false;return {hand,palm,door:doors[i],s,animateGrip};
   });
   const target=new T.Vector3(),rest=new T.Vector3();
   return (t,camera)=>{
-    for(const {hand,palm,door,s} of arms){
+    for(const {hand,palm,door,s,animateGrip} of arms){
+      animateGrip(t,camera);
       const delay=s<0?.07:0;
       const grip=smooth(4.5+delay,6.05+delay,t)*(1-smooth(8.07+delay,9.45+delay,t));
       hand.visible=grip>.001;if(!hand.visible)continue;

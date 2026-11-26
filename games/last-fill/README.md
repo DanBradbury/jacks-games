@@ -1,6 +1,6 @@
 # The Last Fill
 
-A 48-second, guided first-person Three.js short. Start inside a roadside gas station, push both glass doors open, pass a 1974 Corvette-inspired coupe at the pump, and watch a saucer lift a cow from the pasture.
+A 48-second, guided first-person Three.js short. Push through the station doors, walk to the parked 1974 Corvette-inspired coupe, and pull its driver’s door open. From the driver’s seat, close the door and watch a saucer lift a cow beyond the windshield.
 
 From the repository root, run `npm ci` and `npm run dev:last-fill` for development. To build and serve the production scene with Go, run `npm run serve -w @jack-games/last-fill` and open http://127.0.0.1:8080. The Go server uses the standard library. For a Playables ZIP, run `npm run package -w @jack-games/last-fill`.
 
@@ -19,7 +19,7 @@ With Google Chrome and FFmpeg installed, run `npm run render:film -w @jack-games
 
 ## Sound recordings
 
-The stereo location mix moves from refrigerator hum and rain against glass to open rain and shoes on wet pavement. A separate thunder recording follows the flash. The saucer pass uses layered, pitch-shifted compressor recordings. Both cues pan with the camera. All source recordings are [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
+The stereo location mix moves from refrigerator hum and rain against glass to shoes on wet pavement. Footsteps stop at the car, the latch catches, and the closed cabin muffles the storm. A separate thunder recording follows the flash. The saucer pass uses layered, pitch-shifted compressor recordings. Both cues pan with the camera. All source recordings are [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
 
 - Shop compressors by LEGIT Audio. [The Shop](https://opengameart.org/content/the-shop)
 - Window rain by alxl and exterior rain by Kresiek The Furry. [Rain on Window Loop](https://opengameart.org/content/rain-on-window-loop) and [AMB Rain Loop 2](https://opengameart.org/content/amb-rain-loop-2)

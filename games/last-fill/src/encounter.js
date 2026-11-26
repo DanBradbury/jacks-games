@@ -58,14 +58,28 @@ function cow(parent,loader){
   const map=loader.load(hideFile);map.colorSpace=T.SRGBColorSpace;map.anisotropy=6;
   const flank=mat(0xb9b6a9,{map,roughness:.98,side:T.DoubleSide});
   const coat=mat(0xd1c2a8,{roughness:.96});
-  const nose=mat(0x9c7567),hoof=mat(0x32302b);
+  const nose=mat(0x9c7567),hoof=mat(0x32302b),eye=rubber.clone(),udder=mat(0xa9887c);
+  // Fade the entire silhouette with the same fine coverage mask. A ray
+  // passing through the hide must also pass through the far leg and hoof.
+  const coverage={value:1};
+  for(const material of [flank,coat,nose,hoof,eye,udder]){
+    material.onBeforeCompile=shader=>{
+      shader.uniforms.cowCoverage=coverage;
+      shader.fragmentShader='uniform float cowCoverage;\n'+shader.fragmentShader.replace(
+        '#include <clipping_planes_fragment>',`#include <clipping_planes_fragment>
+        if(cowCoverage<1.){
+          float threshold=fract(52.9829189*fract(dot(floor(gl_FragCoord.xy),vec2(.06711056,.00583715))));
+          if(threshold>=cowCoverage)discard;
+        }`);
+    };
+  }
   cattleHide(animal,flank);
   oval(animal,1.554,.984,0,.102,.084,.144,nose).rotation.z=-.36;
-  oval(animal,-.59,.60,.01,.216,.143,.193,mat(0xa9887c));
+  oval(animal,-.59,.60,.01,.216,.143,.193,udder);
   const legs=[],ears=[];
   for(const s of [-1,1]){
     oval(animal,1.614,.997,s*.100,.027,.020,.012,hoof);
-    oval(animal,1.302,1.27,s*.174,.037,.039,.020,rubber);
+    oval(animal,1.302,1.27,s*.174,.037,.039,.020,eye);
     const ear=group(parent,1.14,1.39,s*.13);
     oval(ear,0,0,s*.098,.113,.053,.139,coat).rotation.z=.25;
     ears.push(ear);
@@ -95,12 +109,78 @@ function cow(parent,loader){
   oval(tail,-.14,-.91,.125,.061,.12,.056,hoof);
   bake(animal);
   for(const part of [...legs.map(leg=>leg.lower),...ears,tail]){bake(part);animal.add(part)}
-  return {animal,legs,tail,ears};
+  return {animal,legs,tail,ears,coverage};
 }
-function flightPosition(time,out){
+export const arrivalTime=29.4;
+const inboundStart=28.05;
+export function flightPosition(time,out){
   const approach=1-smooth(28,34.7,time),departure=smooth(44,46.8,time);
-  return out.set(-3.1+48*approach-74*departure,8+14*approach+33*departure+.095*Math.sin(time*1.9),
-    -29.8-30*approach-65*departure);
+  // Start beyond the far plane. Descend out of the right-hand cloud bank
+  // and shed speed before joining the low glide across the windshield.
+  const inbound=(1-smooth(inboundStart,30.45,time))**2;
+  const levelOff=1.65*smooth(.003,.065,inbound)*(1-smooth(.09,.15,inbound));
+  return out.set(-3.1+16.8*approach+244*inbound-74*departure,
+    8-3.55*approach+80*inbound+levelOff+17*departure+.095*Math.sin(time*1.9),
+    -29.8-15*approach-109*inbound-65*departure);
+}
+
+// Sample earlier positions on the banked, rotating rim. Each strip retains
+// its position in the sky as the ship advances, including on timeline seeks.
+function lightTrails(scene){
+  const steps=24,lanes=3,count=steps*lanes*2,coords=new T.BufferAttribute(new Float32Array(count*3),3);
+  const uv=[],indices=[];
+  for(let lane=0;lane<lanes;lane++)for(let j=0;j<steps;j++){
+    const k=(lane*steps+j)*2;
+    uv.push(0,j/(steps-1),1,j/(steps-1));
+    if(j)indices.push(k-2,k-1,k,k-1,k+1,k);
+  }
+  const g=new T.BufferGeometry(),travel=new T.BufferAttribute(new Float32Array(count),1).setUsage(T.DynamicDrawUsage);
+  g.setAttribute('position',coords.setUsage(T.DynamicDrawUsage));
+  g.setAttribute('travel',travel);
+  g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(indices);
+  const material=new T.ShaderMaterial({
+    transparent:true,depthWrite:false,side:T.DoubleSide,forceSinglePass:true,blending:T.AdditiveBlending,
+    uniforms:{strength:{value:0}},
+    vertexShader:`attribute float travel;varying vec2 st;varying float depth,dist;void main(){
+      st=uv;dist=travel;vec4 eye=modelViewMatrix*vec4(position,1.);depth=-eye.z;gl_Position=projectionMatrix*eye;}`,
+    fragmentShader:`varying vec2 st;varying float depth,dist;uniform float strength;void main(){
+      float d=abs(2.*st.x-1.);
+      float core=exp(-15.*d*d),haze=exp(-3.5*d*d);
+      vec3 tint=mix(vec3(.15,.46,1.),vec3(1.25,1.50,1.8),core);
+      float air=1.-smoothstep(40.,96.,depth);
+      gl_FragColor=vec4(tint,(1.-smoothstep(.0,1.,st.y))*(1.-smoothstep(4.,13.,dist))*haze*strength*air);
+    }`
+  });
+  const ribbons=new T.Mesh(g,material);ribbons.frustumCulled=false;scene.add(ribbons);
+  const center=new T.Vector3(),offset=new T.Vector3(),rotation=new T.Euler();
+  return (t,speed,head)=>{
+    material.uniforms.strength.value=smooth(0.6,4.1,speed)*.86;
+    ribbons.visible=t>inboundStart&&t<46.8&&material.uniforms.strength.value>.01;
+    if(!ribbons.visible)return;
+    const departing=t>=44;
+    const duration=departing?.58:T.MathUtils.lerp(1.42,.18,smooth(6,34,speed));
+    // Follow the three pods on the trailing edge during each pass. The
+    // disc rotates while hovering between the two passes.
+    const firstPod=departing?-3:4;
+    for(let j=0;j<steps;j++){
+      const age=j/(steps-1),sample=Math.max(inboundStart,t-age*duration);
+      flightPosition(sample,center);flightRotation(sample,rotation);
+      const distance=center.distanceTo(head);
+      for(let lane=0;lane<lanes;lane++){
+        const a=(firstPod+lane*2)*Math.PI/8,halfWidth=(.12+.045*lane)*(1-.72*age);
+        offset.set(3.48*Math.cos(a),-.25,3.48*Math.sin(a)).applyEuler(rotation).add(center);
+        const k=(lane*steps+j)*2;
+        travel.setX(k,distance);travel.setX(k+1,distance);
+        coords.setXYZ(k,offset.x,offset.y-halfWidth,offset.z);
+        coords.setXYZ(k+1,offset.x,offset.y+halfWidth,offset.z);
+      }
+    }
+    coords.needsUpdate=travel.needsUpdate=true;
+  };
+}
+function flightRotation(t,out){
+  const bank=.28*smooth(inboundStart,29.1,t)*(1-smooth(29.7,30.75,t));
+  return out.set(.028*Math.cos(t),t*.27,bank+.085*(1-smooth(28,34.7,t))-.25*smooth(44,46.8,t));
 }
 
 // Rain dragged off the moving rim disperses at its earlier world positions.
@@ -118,21 +198,21 @@ function rimSpray(scene){
     uniforms:{motion:{value:0},height:{value:1}},transparent:true,depthWrite:false,blending:T.AdditiveBlending,
     vertexShader:`attribute float fade;uniform float height;varying float opacity;
       void main(){vec4 eye=modelViewMatrix*vec4(position,1.);
-        gl_Position=projectionMatrix*eye;gl_PointSize=clamp(height*.021/max(1.,-eye.z),1.,3.);opacity=fade;}`,
+        gl_Position=projectionMatrix*eye;gl_PointSize=clamp(height*.021/max(1.,-eye.z),1.,3.);
+        opacity=fade*(1.-smoothstep(40.,96.,-eye.z));}`,
     fragmentShader:`uniform float motion;varying float opacity;void main(){
       vec2 d=gl_PointCoord*2.-1.;float glint=exp(-3.*dot(d,d));
       gl_FragColor=vec4(.42,.63,.79,opacity*motion*glint*.71);}`});
-  const points=new T.Points(g,material),center=new T.Vector3(),previous=new T.Vector3(),viewport=new T.Vector4();
+  const points=new T.Points(g,material),center=new T.Vector3(),viewport=new T.Vector4();
   points.frustumCulled=false;points.visible=false;scene.add(points);
   points.onBeforeRender=r=>{material.uniforms.height.value=r.getCurrentViewport(viewport).w};
-  return (t,current)=>{
-    const speed=current.distanceTo(flightPosition(t-.05,previous))/.05;
+  return (t,speed)=>{
     material.uniforms.motion.value=smooth(1.6,9,speed);
-    points.visible=t>=28&&t<46.8&&material.uniforms.motion.value>.01;
+    points.visible=t>=inboundStart&&t<46.8&&material.uniforms.motion.value>.01;
     if(!points.visible)return;
     for(let row=0;row<rows;row++){
       const age=row/(rows-1);
-      flightPosition(t-age*.54,center);
+      flightPosition(Math.max(inboundStart,t-age*.54),center);
       for(let j=0;j<16;j++){
         const i=row*16+j,o=offsets[i];
         buffer.setXYZ(i,center.x+o.x,center.y+o.y-age*age*.76,center.z+o.z+age*.36*Math.sin(t*3+j));
@@ -143,7 +223,7 @@ function rimSpray(scene){
 }
 
 export function encounter(scene,loader){
-  const {animal,legs,tail,ears}=cow(scene,loader),craft=group(scene);
+  const {animal,legs,tail,ears,coverage}=cow(scene,loader),craft=group(scene);
   const response=loader.load(alloyFile);response.wrapS=T.RepeatWrapping;response.anisotropy=8;
   const alloy=mat(0x9da7ae,{metalness:.78,roughness:.89,roughnessMap:response,bumpMap:response,bumpScale:.006});
   alloy.onBeforeCompile=shader=>{
@@ -200,26 +280,34 @@ export function encounter(scene,loader){
   for(let i=0;i<140;i++){const a=rng()*2*Math.PI,r=Math.sqrt(rng())*2;coords.push(r*Math.cos(a),rng(),r*Math.sin(a))}
   dustGeom.setAttribute('position',new T.Float32BufferAttribute(coords,3));
   const dust=new T.Points(dustGeom,new T.PointsMaterial({color:0xa7dcda,size:.018,transparent:true,opacity:.65,depthWrite:false}));scene.add(dust);
-  const wake=rimSpray(scene);
+  const wake=rimSpray(scene),trails=lightTrails(scene),previous=new T.Vector3();
   function animate(t){
-    const arrive=smooth(28,34.7,t),leave=smooth(44,46.8,t),lift=smooth(36,43.9,t),active=smooth(34.5,35.7,t)*(1-smooth(43.73,44,t));
+    const lift=smooth(36,43.9,t),active=smooth(34.5,35.7,t)*(1-smooth(43.73,44,t));
     for(const {lower,back,s} of legs){
       const weight=smooth(35.9,37.9,t);
       lower.rotation.z=weight*((back?-.39:.28)+.18*Math.sin(t*2.7+s*1.8+(back?2.1:0)));
     }
-    craft.visible=t>=28&&t<46.8;
-    flightPosition(t,craft.position);wake(t,craft.position);
-    emitter.emissiveIntensity=.12+3.4*active;
-    bloom.material.opacity=.08+.86*active;
-    craft.rotation.set(.028*Math.cos(t),t*.27,.085*(1-arrive)-.25*leave);
+    craft.visible=t<46.8;
+    flightPosition(t,craft.position);flightRotation(t,craft.rotation);
+    const speed=craft.position.distanceTo(flightPosition(t-.05,previous))/.05;
+    wake(t,speed);trails(t,speed,craft.position);
+    const ignition=smooth(arrivalTime-.55,arrivalTime+.20,t)*(1-smooth(arrivalTime+.20,arrivalTime+.80,t));
+    const running=smooth(.6,4.1,speed);
+    glow.color.setRGB(1.9+2*ignition,1.75+.6*running+4*ignition,1.5+1.4*running+7*ignition);
+    emitter.emissiveIntensity=.12+.65*running+7*ignition+3.4*active;
+    bloom.scale.set(4.8+5*ignition,2.7+1.4*ignition,1);
+    bloom.material.color.setRGB(1+1.2*ignition,1+2.3*ignition,1+4*ignition);
+    bloom.material.opacity=(.08+.16*running+.58*ignition+.86*active)*smooth(-100,-43,craft.position.z);
     tail.rotation.x=.13+.21*Math.sin(t*1.14)+.07*Math.sin(t*2.9);
     for(const [i,ear] of ears.entries()){
       const flick=Math.max(0,Math.sin(t*1.7+i*2.6))**18;
       ear.rotation.x=(i?1:-1)*(.07+.24*flick);
     }
     animal.scale.y=1+.0035*Math.sin(t*1.8);
-    animal.visible=t<43.78;
-    animal.position.set(-3.1+.18*Math.sin(lift*Math.PI),.035+6.97*lift,-29.8);
+    const rise=6.97*lift;
+    coverage.value=smooth(1.05,3.4,6.97-rise);
+    animal.visible=coverage.value>0;
+    animal.position.set(-3.1+.18*Math.sin(lift*Math.PI),.035+rise,-29.8);
     animal.rotation.set(lift*.13,-.17+lift*.84,.014*Math.sin(t*1.64)+lift*.42);
     const height=craft.position.y-.7;
     beam.visible=dust.visible=active>.001;

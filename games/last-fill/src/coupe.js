@@ -3,6 +3,11 @@ import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js'
 import {group,mesh,mat,rubber,metal,chrome,box,oval,tube,panel,cylinder,bake} from './geometry.js';
 
 import {bodyShell,deckPoint,lacquer,noseDepth,rearHardware,sidePoint} from './coupe-body.js';
+import {carOptics} from './car-optics.js';
+import {wetPane} from './rain.js';
+import {doorRelease} from './door-release.js';
+import {bucketSeats} from './bucket-seats.js';
+import {driverDash} from './cockpit.js';
 import wheelResponse from './wheel-response.webp';
 import wheelImage from './rally-wheel.jpg';
 
@@ -35,7 +40,51 @@ function panelGap(car,landmarks,surface,radius){
   const path=new T.CatmullRomCurve3(seam);
   mesh(car,new T.TubeGeometry(path,seam.length*2,radius,6,false),rubber);
 }
-export function coupe(parent,loader){
+function windshield(u,v){
+  return [u*(.78-.205*v),.838+.432*v+(.012+.025*v)*(1-u*u),
+    .65*(1-v)+.005*v+(.115-.068*v)*(1-u*u)];
+}
+function roof(u,v){
+  const [x,y,z]=windshield(u,1);
+  return [T.MathUtils.lerp(x,u*.595,v),y+.011*v*(1-u*u)+.014*Math.sin(Math.PI*v),
+    T.MathUtils.lerp(z,-.754,v)];
+}
+
+// Sweep the reveal moulding and its padded backing on one continuous section.
+// Both finishes share borders and turn the windshield corner together.
+function windowFrame(car,side,metalFinish,padding){
+  const foot=new T.Vector3(...windshield(side,0)),corner=new T.Vector3(...roof(side,0));
+  const bend=new T.QuadraticBezierCurve3(
+    new T.Vector3(...windshield(side,.963)),corner,new T.Vector3(...roof(side,.040)));
+  const sections=[new T.Vector3(...windshield(side,-.17)),new T.Vector3(...windshield(side,-.08))];
+  for(let j=0;j<=16;j++)sections.push(foot.clone().lerp(bend.v0,j/16));
+  const startOfBend=sections.length-1;
+  for(let j=1;j<=10;j++)sections.push(bend.getPoint(j/10));
+  const endOfBend=sections.length-1;
+  for(let j=1;j<=32;j++)sections.push(new T.Vector3(...roof(side,.040+.960*j/32)));
+  const rearCorner=sections.at(-1);
+  sections.push(rearCorner.clone().add(new T.Vector3(-side*.014,-.006,-.009)));
+  const frames=sections.map((center,i)=>{
+    const tangent=sections[Math.min(i+1,sections.length-1)].clone()
+      .sub(sections[Math.max(0,i-1)]).normalize();
+    const upper=new T.Vector3(0,-tangent.z,tangent.y).normalize();
+    const outer=new T.Vector3().crossVectors(tangent,upper).multiplyScalar(side);
+    const post=1-T.MathUtils.smoothstep(i,startOfBend,endOfBend);
+    return {center,outer,upper,depth:.019+.007*post,width:.016+.017*post};
+  });
+  function band(from,to,finish){
+    skin(car,(u,v)=>{
+      const f=frames[Math.round(v*(frames.length-1))];
+      const a=T.MathUtils.lerp(from,to,(u+1)/2)*-side;
+      return f.center.clone().addScaledVector(f.outer,f.depth*Math.cos(a)-.006)
+        .addScaledVector(f.upper,f.width*Math.sin(a)).toArray();
+    },finish,16,frames.length-1);
+  }
+  // Chrome rolls over the exterior face; vinyl wraps the cabin side.
+  band(-1.20,1.20,metalFinish);
+  band(1.20,2*Math.PI-1.20,padding);
+}
+export function coupe(parent,loader,clock,optics){
   const wheels=loader.load(wheelImage);wheels.colorSpace=T.SRGBColorSpace;wheels.anisotropy=4;
   const wheelFinish=loader.load(wheelResponse);wheelFinish.anisotropy=6;
   const wheelMaterial=mat(0xdfdcd4,{map:wheels,metalnessMap:wheelFinish,metalness:.74,roughnessMap:wheelFinish,
@@ -43,11 +92,21 @@ export function coupe(parent,loader){
   const car=group(parent,2.03,.012,-7.3);
   car.rotation.y=Math.PI-.09;
   const red=lacquer();
-  const glass=new T.MeshPhysicalMaterial({color:0x526363,ior:1.51,roughness:.16,specularIntensity:.21,
-    transparent:true,depthWrite:false,opacity:.26,side:T.DoubleSide});
+  const {glass,doorMirror,cabinMirror,capture}=carOptics(car);
+  function glazing(owner,surface,width,height,offset){
+    const pane=skin(owner,surface,glass(surface(0,.5)),32,12);
+    const uv=pane.geometry.attributes.uv;
+    for(let j=0;j<=12;j++)for(let i=0;i<=32;i++)uv.setXY(j*33+i,i/32*width,j/12*height);
+    wetPane(owner,0,0,0,width,height,offset,clock,optics,pane.geometry);
+  }
   const windowTrim=mat(0xa4a5a1,{metalness:.84,roughness:.39});
+  const pillarPadding=mat(0x282625,{roughness:.75});
   const leather=mat(0x382622),amber=mat(0xb67324,{roughness:.29}),reflector=mat(0x84241b,{roughness:.28});
-  bodyShell(car,red);
+  // Build the movable assembly in body coordinates, then reparent it to the
+  // forward hinge after the fixed shell has been batched.
+  const leaf=new T.Group(),pulls={};
+  let driverRelease;
+  const openings=bodyShell(car,leaf,red);
   rearHardware(car);
   for(const s of [-1,1]){
     const grille=group(car,s*.44,.366,noseDepth(s*.44,.366)-.026);
@@ -65,12 +124,16 @@ export function coupe(parent,loader){
       rallyWheel(wheel,wheelMaterial);
     }
     const onSide=(y,z,offset)=>sidePoint(s,y,z,offset);
-    tube(car,[[-.94,.29],[-.73,.274],[0,.263],[.68,.274],[.90,.29]].map(([z,y])=>onSide(y,z,.002)),.012,windowTrim);
+    const door=s===1?leaf:car;
+    const rockerProfile=new T.SplineCurve([[-.94,.29],[-.73,.274],[0,.263],[.68,.274],[.90,.29]]
+      .map(([z,y])=>new T.Vector2(z,y)));
+    tube(car,rockerProfile.getPoints(48).map(p=>onSide(p.y,p.x,.004)),.008,windowTrim);
     const shut=[[.801,-.73],[.71,-.765],[.48,-.745],[.347,-.66],[.325,-.43],[.327,.34],[.36,.48],[.49,.537],[.71,.554],[.792,.536]];
-    panelGap(car,shut,(y,z)=>onSide(y,z,.0012),.0035);
-    const latch=group(car,...onSide(.736,-.556,.002));
-    oval(latch,0,0,0,.009,.028,.085,rubber);
-    box(latch,s*.007,.008,0,.015,.019,.128,windowTrim);
+    if(s<0)panelGap(car,shut,(y,z)=>onSide(y,z,.0012),.0035);
+    else panelGap(leaf,[[.79,-.774],[.58,-.774],[.34,-.774],[.326,-.65],[.326,.42],[.34,.549],[.59,.549],[.78,.549]],(y,z)=>onSide(y,z,.0012),.0035);
+    const release=doorRelease(door,s,openings[s<0?0:1],red,windowTrim);
+    if(s===1){driverRelease=release;pulls.outside=release.pads}
+    else release.mount.add(release.rocker);
     for(let j=0;j<3;j++){
       const vent=group(car,...onSide(.60,.697+j*.070,.002));
       vent.rotation.x=-.19;
@@ -83,43 +146,61 @@ export function coupe(parent,loader){
       mesh(marker,new RoundedBoxGeometry(.014,.043,.121,2,.006),rubber);
       mesh(marker,new RoundedBoxGeometry(.010,.031,.108,2,.004),lens,s*.007,0,0);
     }
-    const front=[s*.78,.86,.65],a=[s*.575,1.27,.005],b=[s*.59,1.28,-.69];
-    panel(car,[front,a,b,[s*.77,.86,-.86]],glass);
-    tube(car,[front,a],.025,windowTrim);
-    tube(car,[a,[s*.595,1.30,-.31],b],.015,windowTrim);
-    tube(car,[front,[s*.788,.863,-.11],[s*.77,.86,-.86]],.010,windowTrim);
+    const sideGlass=(u,v)=>{
+      const t=(u+1)*.5,z=T.MathUtils.lerp(-.807,.599,t);
+      const lower=deckPoint(s*.757,z);
+      const top=roof(s,.916*(1-t));
+      return [T.MathUtils.lerp(lower[0],top[0]-s*.008,v)+s*.008*Math.sin(Math.PI*v),
+        T.MathUtils.lerp(lower[1]-.006,top[1]-.011,v),T.MathUtils.lerp(z,top[2],v)];
+    };
+    glazing(door,sideGlass,1.39,.46,3+s);
+    windowFrame(car,s,windowTrim,pillarPadding);
+    // Set the belt moulding into the door crown, with separate fixed ends at the jambs.
+    const beltSections=s===1?[[-.86,-.776,car],[-.774,.549,door],[.551,.65,car]]:[[-.86,.65,car]];
+    for(const [from,to,owner] of beltSections){
+      const belt=[];
+      for(let j=0;j<=40;j++){
+        const z=from+(to-from)*j/40,p=deckPoint(s*.770,z);p[1]+=.004;belt.push(p);
+      }
+      tube(owner,belt,.0075,windowTrim);
+    }
 
     // Trace shut lines directly on the compound-curved deck.
     const line=(coords,r)=>panelGap(car,coords,(x,z)=>deckPoint(s*x,z),r);
     line([[.43,1.83],[.57,1.83],[.72,1.83],[.735,1.87],[.716,2.02],[.68,2.043],[.53,2.056],[.44,2.054],[.425,2.015],[.426,1.91],[.43,1.83]],.0028);
     line([[.66,.63],[.64,.81],[.60,1.11],[.52,1.46],[.415,1.75],[.385,1.81],[.26,1.82],[0,1.82]],.0028);
-    tube(car,[onSide(.816,.34),[s*.87,.856,.34],[s*.91,.883,.35]],.017,red);
-    oval(car,s*.923,.908,.34,.108,.063,.116,red);
-    oval(car,s*.923,.908,.266,.089,.050,.026,rubber);
-    oval(car,s*.923,.908,.251,.082,.044,.016,chrome);
-
-    const seat=group(car,s*.365,.80,-.33);seat.rotation.x=-.24;
-    oval(seat,0,.07,0,.231,.265,.102,leather);
-    for(const edge of [-1,1])oval(seat,edge*.194,.015,.060,.047,.192,.065,leather);
-    for(let i=0;i<5;i++)tube(seat,[[-.145,-.041+i*.047,.095],[0,-.048+i*.047,.106],[.145,-.041+i*.047,.095]],.003,rubber);
-    oval(seat,0,.269,-.026,.168,.097,.079,leather);
+    doorMirror(door,s,deckPoint(s*.786,.32));
   }
-  const windshield=(u,v)=>[
-    u*(.78-.205*v),.86+.41*v+.018*(1-u*u),
-    .65*(1-v)+.005*v+(.115-.068*v)*(1-u*u)
-  ];
-  skin(car,windshield,glass);
+  glazing(car,windshield,1.50,.80,6);
+  // Bridge the cowl to the glass and continue the padded dash to its inner seal.
+  skin(car,(u,v)=>{
+    const p=windshield(u,0),q=deckPoint(p[0],p[2]+.105);
+    return [p[0],T.MathUtils.lerp(p[1]-.003,q[1],v),T.MathUtils.lerp(p[2],q[2],v)];
+  },red,40,6);
+  skin(car,(u,v)=>{
+    const p=windshield(u,0);
+    return [u*(.685+.095*v),T.MathUtils.lerp(.869,p[1]-.002,v),T.MathUtils.lerp(.47,p[2],v)];
+  },mat(0x27282a,{roughness:.78,side:T.DoubleSide}));
+  cabinMirror();
   for(const v of [0,1]){
     const rim=Array.from({length:13},(_,i)=>windshield(i/6-1,v));
-    tube(car,rim,.019,rubber);
+    tube(car,rim,v?.011:.009,rubber);
   }
-  skin(car,(u,v)=>[u*(.578+.017*v),1.27+.048*(1-u*u)+.014*Math.sin(Math.PI*v),.006-.76*v+.047*(1-u*u)*(1-v)],red);
-  tube(car,[[0,1.32,.044],[0,1.329,-.30],[0,1.318,-.74]],.006,rubber);
+  skin(car,roof,red);
+  skin(car,(u,v)=>{
+    const [x,y,z]=roof(u,v);
+    return [x*.984,y-.014,z];
+  },mat(0x352e2b,{side:T.DoubleSide,roughness:.98}));
+  tube(car,Array.from({length:25},(_,j)=>roof(0,j/24)),.0045,rubber);
   const backlight=(u,v)=>[
     u*(.602-.031*v),.895+.370*v+.015*(1-u*u),
-    -1.097+.329*v-.041*(1-u*u)
+    -.977+.209*v-.024*(1-u*u)
   ];
-  skin(car,backlight,glass,32,12);
+  glazing(car,backlight,1.18,.42,9);
+  skin(car,(u,v)=>{
+    const p=backlight(u,0),q=deckPoint(p[0],-1.19);
+    return [p[0],T.MathUtils.lerp(p[1]-.005,q[1],v),T.MathUtils.lerp(p[2],q[2],v)];
+  },red,32,8);
   for(const v of [0,1])tube(car,Array.from({length:17},(_,j)=>backlight(j/8-1,v)),.014,rubber);
   skin(car,(u,v)=>[u*(.595-.024*v),
     T.MathUtils.lerp(1.27+.048*(1-u*u),backlight(u,1)[1],v),
@@ -134,28 +215,45 @@ export function coupe(parent,loader){
       edge.x+=s*.022*(1-u*u)*Math.sin(Math.PI*v);
       return edge.toArray();
     },red,20,14);
-    box(car,s*.68,.672,-.15,.10,.25,.91,leather);
-    oval(car,s*.36,.73,-.30,.24,.105,.29,leather);
+    const door=s===1?leaf:car;
+    mesh(door,new RoundedBoxGeometry(.075,.432,1.27,3,.025),leather,s*.661,.601,-.113);
+    mesh(door,new RoundedBoxGeometry(.082,.069,1.24,3,.02),rubber,s*.668,.791,-.11);
+    for(let j=0;j<4;j++)
+      tube(door,[[s*.621,.493+j*.017,-.66],[s*.620,.493+j*.017,-.12],[s*.621,.493+j*.017,.44]],.0025,rubber);
+    mesh(door,new RoundedBoxGeometry(.065,.05,.43,3,.020),leather,s*.609,.602,-.19);
+    const grip=group(door,s*.554,.682,-.193);
+    mesh(grip,new RoundedBoxGeometry(.026,.027,.220,4,.012),leather);
+    for(const end of [-1,1]){
+      tube(grip,[[0,0,end*.105],[s*.012,.005,end*.126],[s*.067,.011,end*.149]],.013,leather);
+      box(grip,s*.067,.011,end*.149,.009,.039,.043,windowTrim);
+    }
+    if(s===1)pulls.inside=grip;
+    box(door,s*.620,.707,.151,.011,.041,.109,rubber);
+    box(door,s*.608,.705,.151,.017,.014,.080,windowTrim);
+
   }
+  bucketSeats(car);
   box(car,0,.806,-.882,1.25,.078,.35,leather);
-  box(car,0,.786,.37,1.39,.19,.32,rubber);
-  // The model faces +Z, so its left-hand driving position is on local +X.
-  const driverX=.39;
-  for(const x of [driverX-.087,driverX+.085]){
-    const gauge=cylinder(car,x,.82,.194,.075,.075,.022,metal,36);gauge.rotation.x=Math.PI/2;
-    const dial=cylinder(car,x,.82,.18,.066,.066,.010,rubber,36);dial.rotation.x=Math.PI/2;
-    tube(car,[[x,.82,.172],[x-.032,.854,.172]],.003,chrome);
-  }
+  box(car,0,.532,-.10,1.42,.030,1.34,rubber);
+  const scuffPlate=mat(0x807b70,{metalness:.49,roughness:.54});
+  box(car,.754,.328,-.11,.139,.027,1.34,scuffPlate);
+  for(let j=0;j<5;j++)box(car,.703+.024*j,.343,-.11,.004,.004,1.24,scuffPlate);
+  for(const z of [-.74,.515])for(const x of [.714,.793])oval(car,x,.344,z,.005,.002,.005,rubber);
+  // Local +X is the driver's left when facing the hood (+Z).
+  driverDash(car,.39);
   box(car,0,.631,-.102,.165,.217,.43,rubber);
   tube(car,[[0,.71,-.145],[0,.784,-.13],[0,.831,-.105]],.011,chrome);
   oval(car,0,.84,-.105,.027,.031,.027,rubber);
-  tube(car,[[.10,.873,.74],[.32,.884,.67],[.61,.883,.61]],.008,rubber);
-  
-  tube(car,[[-.74,.877,.62],[-.57,.901,.55],[-.27,.902,.54]],.009,rubber);
-  const wheel=mesh(car,new T.TorusGeometry(.15,.014,10,32),rubber,driverX,.94,.2);wheel.rotation.x=-.36;
-  for(let k=0;k<3;k++){
-    const a=k*2*Math.PI/3+.35;
-    tube(car,[[driverX,.94,.2],[driverX+.13*Math.cos(a),.94+.124*Math.sin(a),.2-.040*Math.sin(a)]],.008,chrome);
+  // Park the two articulated blades against the curvature of the lower glass.
+  for(const start of [-.89,.06]){
+    const blade=[];
+    for(let i=0;i<=12;i++){
+      const t=i/12,u=start+.79*t,v=.029+.049*t+.010*Math.sin(Math.PI*t);
+      const p=windshield(u,v);p[1]+=.004;p[2]+=.005;blade.push(p);
+    }
+    tube(car,blade,.0034,rubber);
+    const joint=blade[6],base=windshield(start+.61,.006);
+    tube(car,[base,[base[0]-.024,base[1]+.008,base[2]], [joint[0],joint[1]+.004,joint[2]+.006]],.0036,windowTrim);
   }
   // The closed, body-colored fuel door follows the deck crown. Its gasket is
   // visible only as a narrow panel gap around the flush painted lid.
@@ -165,6 +263,10 @@ export function coupe(parent,loader){
   for(let i=0;i<rim.count;i++)rim.setXYZ(i,...deckPoint(rim.getX(i),-1.71+rim.getZ(i)));
   fuelSeam.computeVertexNormals();mesh(car,fuelSeam,rubber);
   bake(car);
+  bake(leaf);
+  const {mount,rocker:lever}=driverRelease;mount.add(lever);
+  const hinge=group(car,.779,.555,.554);
+  leaf.position.copy(hinge.position).negate();hinge.add(leaf);
   const shadowCanvas=document.createElement('canvas');shadowCanvas.width=shadowCanvas.height=128;
   const ctx=shadowCanvas.getContext('2d'),shade=ctx.createRadialGradient(64,64,0,64,64,64);
   shade.addColorStop(0,'rgba(0,0,0,.85)');shade.addColorStop(.58,'rgba(0,0,0,.66)');shade.addColorStop(1,'rgba(0,0,0,0)');
@@ -176,5 +278,5 @@ export function coupe(parent,loader){
   }
   contact(0,0,2.85,5.8);
   for(const s of [-1,1])for(const z of [-1.39,1.34])contact(s*.84,z,.66,.90);
-  return car;
+  return {car,hinge,lever,pulls,capture};
 }

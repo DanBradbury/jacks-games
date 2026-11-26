@@ -22,7 +22,7 @@ export function streetLights(scene) {
       float radius=(v.x-.5)/width;
       float core=exp(-radius*radius*2.8);
       float alpha=core*pow(height,.85)*smoothstep(0.,.045,dist);
-      gl_FragColor=vec4(.82,.68,.47,alpha*.22*exp(-pow(range*fogDensity,2.)));
+      gl_FragColor=vec4(.82,.68,.47,alpha*.135*exp(-pow(range*fogDensity,2.)));
     }`
   });
   const shafts = [];

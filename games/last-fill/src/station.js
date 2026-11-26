@@ -8,38 +8,78 @@ import concreteFile from '../../night-shift/src/scans/concrete_floor_damaged_01_
 import floorMap from './worn_asphalt.jpg';
 import pastureMap from './rocky_terrain_02.jpg';
 import roofMap from './corrugated_iron_02.jpg';
+import {roomLightUVs} from './shop-surfaces.js';
 import {shopInterior} from './shop.js';
-import {stationFinishes,serviceBay} from './service-bay.js';
+import {stationFinishes,serviceBay,cladWall} from './service-bay.js';
+import {roadsideSign} from './roadside-sign.js';
 import {weather} from './finish.js';
 import {wetPane} from './rain.js';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import floorNormal from './asphalt-normal.jpg';
 
-const ivory=mat(0xb8b6a1),enamel=mat(0xa53d29,{roughness:.63}),trim=mat(0x425047,{metalness:.22,roughness:.66}),fluoro=mat(0xfaf2d9,{emissive:0xffeac2,emissiveIntensity:3.4});
+const ivory=mat(0xb8b6a1),enamel=mat(0xa53d29,{roughness:.63}),trim=mat(0x425047,{metalness:.22,roughness:.66}),fluoro=mat(0xc5cdc5,{emissive:0xeaf4e9,emissiveIntensity:2.65});
 [ivory,enamel,trim].forEach(m=>weather(m,.86));
-function canopyLamp(scene,x,y,z,color,power,range){
-  const lamp=new T.SpotLight(color,power,range,1.42,.45,2);
-  lamp.position.set(x,y,z);lamp.target.position.set(x,0,z);
-  scene.add(lamp,lamp.target);return lamp;
+const postRows=[-2.87,3.66],postBays=[-5.5,-9.7];
+const fixtureX=post=>post+(post<0?.90:-.90);
+
+function canopyCeiling(map){
+  // A little light returns from the concrete and spills around the ends of
+  // the reflector. Store that static irradiance on the underside only.
+  const res=64,data=new Uint8Array(res*res*4);
+  for(let y=0;y<res;y++)for(let x=0;x<res;x++){
+    const worldX=1.5+((x+.5)/res-.5)*10.18;
+    const worldZ=-7.55+((y+.5)/res-.5)*8.98;
+    let bounce=.07;
+    for(const post of postRows)for(const bay of postBays){
+      const dx=worldX-fixtureX(post),dz=worldZ-bay;
+      bounce+=.13/(1+.24*(dx*dx+dz*dz))+.40*Math.exp(-4*dx*dx-2*dz*dz);
+    }
+    const i=(y*res+x)*4;
+    data[i]=bounce*246;data[i+1]=bounce*240;data[i+2]=bounce*219;data[i+3]=255;
+  }
+  const lightMap=new T.DataTexture(data,res,res);
+  lightMap.channel=0;lightMap.magFilter=lightMap.minFilter=T.LinearFilter;lightMap.needsUpdate=true;
+  return mat(0xd2d0c7,{map,roughness:.85,lightMap,lightMapIntensity:1.45});
 }
+
 function pump(p,x,z,n,finish){
-  const g=group(p,x,0,z);g.rotation.y=x>0?-.89:.59;
-  box(g,0,.11,0,1.24,.22,1.0,ivory);box(g,0,.65,0,.79,1.0,.55,enamel);
-  mesh(g,new RoundedBoxGeometry(.88,.80,.60,3,.042),ivory,0,1.46,0);box(g,0,1.89,0,.93,.075,.64,enamel);
+  const plinth=group(p,x,.168,z);
+  mesh(plinth,new RoundedBoxGeometry(1.06,.086,1.13,2,.024),finish.foot,0,.043,0);
+  const g=group(plinth,0,.082,0);g.rotation.y=x>0?-.89:.59;
+  mesh(g,new RoundedBoxGeometry(.80,1.03,.56,3,.018),finish.pumpRed,0,.525,0);
+  box(g,0,1.045,0,.816,.018,.57,finish.gasket);
+  mesh(g,new RoundedBoxGeometry(.88,.80,.60,3,.042),finish.pumpCream,0,1.45,0);
+  mesh(g,new RoundedBoxGeometry(.91,.058,.63,2,.015),finish.pumpRed,0,1.861,0);
+  function badge(parent,x,y,z,w,h,lines,bg,ink){
+    const label=paint(parent,x,y,z,w,h,lines,bg,ink);
+    label.material.color.setHex(0xc3bead);label.material.roughness=1;
+    label.material.bumpMap=label.material.roughnessMap=finish.enamelResponse;
+    label.material.bumpScale=.00012;
+  }
   for(const side of [-1,1]){
     const front=group(g);front.rotation.y=side<0?Math.PI:0;
-    box(front,0,1.49,.302,.77,.567,.016,metal);
-    mesh(front,new T.PlaneGeometry(.737,.536),finish.meter,0,1.49,.313);
-    for(const side of [-1,1])for(const y of [1.22,1.76])oval(front,side*.384,y,.30,.012,.012,.006,metal);
-    paint(front,0,1.189,.304,.52,.13,[['LEADED  MOTOR  FUEL',.31,.27],['MINIMUM OCTANE  87',.25,.72]],'#a99b7e');
-    for(let k=0;k<8;k++)box(front,-.237+k*.068,1.02,.28,.044,.021,.006,rubber);
-    paint(front,0,.80,.28,.49,.23,[['REGULAR',.38,.56]],'#e3d8b7','#a83b24');
-    paint(front,0,1.78,.306,.54,.086,[['S I E R R A    O I L',.61,.53]],'#d7cdb5');
+    mesh(front,new RoundedBoxGeometry(.754,.518,.015,2,.008),finish.gasket,0,1.49,.303);
+    mesh(front,new T.PlaneGeometry(.732,.496),finish.meter,0,1.49,.312);
+    badge(front,0,1.16,.302,.50,.096,[['LEADED  MOTOR  FUEL',.31,.27],['MINIMUM OCTANE  87',.25,.72]],'#b4ab8e');
+    // Removable service door: folded lip, recessed latch and captive screws.
+    box(front,0,.54,.281,.724,.867,.005,finish.gasket);
+    mesh(front,new RoundedBoxGeometry(.716,.858,.012,2,.005),finish.pumpRed,0,.54,.286);
+    box(front,.272,.854,.294,.056,.025,.009,finish.gasket);
+    for(const x of [-.325,.325])for(const y of [.148,.928]){
+      const stud=cylinder(front,x,y,.294,.006,.006,.004,metal,10);
+      stud.rotation.x=Math.PI/2;
+    }
+    for(let k=0;k<8;k++)box(front,-.237+k*.068,.921,.294,.044,.014,.004,finish.gasket);
+    badge(front,0,.70,.294,.49,.21,[['REGULAR',.38,.56]],'#bdb299','#903e31');
+    badge(front,0,1.782,.301,.54,.073,[['S I E R R A    O I L',.61,.53]],'#bdb299','#623d32');
   }
   tube(g,[[.44,1.67,0],[.66,1.23,.06],[.68,.29,.10],[.53,.25,.25],[.49,1.14,.19]],.032,rubber);
+  box(g,.410,1.21,.12,.055,.21,.135,finish.gasket);
+  tube(g,[[.49,1.10,.20],[.554,1.122,.207],[.572,1.185,.175],[.515,1.246,.144]],.012,metal);
   link(g,[.47,1.06,.2],[.51,1.28,.13],.048,.054,trim);
   link(g,[.51,1.28,.13],[.43,1.41,.06],.022,.025,chrome);
-  paint(g,0,1.92,.334,.17,.15,[[String(n),.75,.53]],'#9d3927','#f8eccc');
+  box(g,0,1.91,.285,.18,.15,.026,finish.pumpRed);
+  badge(g,0,1.91,.30,.17,.14,[[String(n),.75,.53]],'#9d3927','#f8eccc');
 }
 // Local +Y becomes world -Z when these coplanar surfaces are laid flat.
 function roadStrip(width,offset=0){
@@ -158,15 +198,18 @@ export function station(scene,loader,filmTime,optics){
   RectAreaLightUniformsLib.init();
   const roadSurface=roadStrip(5.8);
   const puddles=pavement(scene,loader,roadSurface,filmTime);
-  const shell=group(scene),rng=seed(74),finish=stationFinishes(loader);
+  const shell=group(scene),rng=seed(74),finish=stationFinishes(loader,filmTime);
   serviceBay(shell,scene,finish);
   // Low specular response keeps point lights from blooming into opaque disks on the shop windows.
   const glass=new T.MeshPhysicalMaterial({color:0xbac7c3,roughness:.32,metalness:0,specularIntensity:.1,
     transparent:true,opacity:.065,depthWrite:false,side:T.DoubleSide});
-  shopInterior(shell,scene,loader);
-  box(shell,0,1.48,7.4,10,2.96,.14,finish.wall);
+  const {probeMaterials,doorMetal}=shopInterior(shell,scene,loader);
+  probeMaterials.push(doorMetal);
+  cladWall(shell,0,1.48,7.4,10,2.96,.14,finish.storeWall);
+  // Full-width structural head bridges the transom and both window bays.
+  box(shell,0,2.896,0,10.04,.204,.168,trim);
   for(const s of [-1,1]){
-    box(shell,s*5,1.48,3.7,.16,2.96,7.4,finish.wall);
+    cladWall(shell,s*5,1.48,3.7,.16,2.96,7.4,finish.storeWall);
     box(shell,s*3.04,.41,.02,3.92,.82,.14,trim);box(shell,s*3.04,1.81,0,3.92,1.97,.035,glass);
     wetPane(shell,s*3.04,1.81,-.019,3.92,1.97,s*3.04,filmTime,optics);
     // The fixed display windows cast shop light onto the forecourt. Keep
@@ -186,16 +229,16 @@ export function station(scene,loader,filmTime,optics){
     const door=group(scene,s*1.08,.086,0),cx=-s*.532;
     box(door,cx,1.14,0,1.01,2.21,.03,glass);
     wetPane(door,cx,1.14,-.016,1.01,2.21,s*.548,filmTime,optics);
-    for(const x of [-s*.032,-s*1.034])box(door,x,1.14,0,.056,2.28,.07,metal);
-    for(const y of [.08,2.25])box(door,cx,y,0,1.065,y<1?.16:.068,.075,metal);
+    for(const x of [-s*.032,-s*1.034])box(door,x,1.14,0,.056,2.28,.07,doorMetal);
+    for(const y of [.08,2.25])box(door,cx,y,0,1.065,y<1?.16:.068,.075,doorMetal);
     for(const x of [-s*.16,-s*.88])box(door,x,1.08,.072,.046,.058,.13,chrome);
-    mesh(door,new RoundedBoxGeometry(.86,.063,.062,3,.011),metal,cx,1.08,.14);
+    mesh(door,new RoundedBoxGeometry(.86,.063,.062,3,.011),doorMetal,cx,1.08,.14);
     paint(door,cx,1.36,.024,.29,.084,[['P U S H',.65,.52]],'#dbd4b9');
     if(s===1)paint(door,cx,1.76,-.025,.45,.20,[['OPEN',.73,.51]],'#354940','#f1dbad',true);
     bake(door);doors.push(door);
   }
   const soffit=loader.load(roofMap);soffit.colorSpace=T.SRGBColorSpace;soffit.wrapS=soffit.wrapT=T.RepeatWrapping;soffit.repeat.set(4,4);
-  box(shell,1.5,3.596,-7.55,10.18,.035,8.98,mat(0xaba28e,{map:soffit,roughness:.85}));
+  box(shell,1.5,3.596,-7.55,10.18,.035,8.98,canopyCeiling(soffit));
   for(const x of [-2.8,.07,3.64,6.2])box(shell,x,3.545,-7.55,.07,.10,8.9,trim);
   box(shell,1.5,3.77,-7.55,10.2,.31,9.0,ivory);
   for(const y of [3.76,3.85])box(shell,1.5,y,-7.55,10.23,.045,9.03,enamel);
@@ -208,36 +251,36 @@ export function station(scene,loader,filmTime,optics){
     const top=Math.abs(norm.getY(i))>.65,side=Math.abs(norm.getX(i))>.65;
     uv.setXY(i,(!top&&side?pos.getZ(i):pos.getX(i))*.56,(top?pos.getZ(i):pos.getY(i))*.56);
   }
-  for(const x of [3.66,-2.87]){
+  for(const x of postRows){
     mesh(shell,curb,island,x,.048,-7.7);
-    for(const z of [-5.5,-9.7]){
+    for(const z of postBays){
       box(shell,x,1.83,z,.18,3.56,.22,ivory);
       box(shell,x,.48,z,.205,.69,.245,trim);
-      link(shell,[x,3.12,z],[x+.46,3.55,z],.045,.045,metal);
-      link(shell,[x,3.12,z],[x-.46,3.55,z],.045,.045,metal);
-      box(shell,x,3.47,z,.47,.085,1.41,trim);
+      const lampX=fixtureX(x);
+      link(shell,[x,3.12,z],[x+.46,3.55,z],.035,.035,trim);
+      link(shell,[x,3.12,z],[x-.46,3.55,z],.035,.035,trim);
+      box(shell,lampX,3.505,z,.37,.14,1.38,trim);
+      box(shell,lampX,3.431,z,.30,.012,1.30,ivory);
       box(shell,x,1.1,z,.21,.25,.25,ivory);
-      for(const dx of [-.13,.13]){
-        link(shell,[x+dx,3.418,z-.61],[x+dx,3.418,z+.61],.018,.018,fluoro);
-        for(const dz of [-.63,.63])box(shell,x+dx,3.432,z+dz,.06,.068,.06,ivory);
+      for(const dx of [-.087,.087]){
+        link(shell,[lampX+dx,3.409,z-.61],[lampX+dx,3.409,z+.61],.018,.018,fluoro);
+        for(const dz of [-.63,.63])box(shell,lampX+dx,3.414,z+dz,.06,.068,.06,ivory);
+      }
+      const strip=new T.RectAreaLight(0xe3eee3,34,.25,1.22);
+      strip.position.set(lampX,3.405,z);strip.rotation.x=-Math.PI/2;scene.add(strip);
+      // Shadowed contribution from the near ballast bay anchors the car and
+      // islands. The broad penumbra follows the cutoff of the steel reflector.
+      if(x>0&&z===-5.5){
+        const lamp=new T.SpotLight(0xe3eee3,6,12,1.06,.76,2);
+        lamp.position.copy(strip.position);lamp.target.position.set(lampX-.36,0,z-.4);
+        lamp.castShadow=true;lamp.shadow.mapSize.set(512,512);
+        lamp.shadow.camera.near=.25;lamp.shadow.bias=-.0007;lamp.shadow.normalBias=.014;
+        scene.add(lamp,lamp.target);
       }
     }
     pump(shell,x,-7.55,x>0?2:1,finish);
   }
-  // Give the bright fixtures a finite emitting surface. The shadow-casting
-  // fill still grounds the wheels, while the tubes draw narrow reflections.
-  for(const x of [-2.87,3.66])for(const z of [-5.5,-9.7]){
-    const strip=new T.RectAreaLight(0xffeed6,11,.28,1.22);
-    strip.position.set(x,3.415,z);strip.rotation.x=-Math.PI/2;scene.add(strip);
-  }
-  const canopyLight=canopyLamp(scene,1.2,3.36,-6.9,0xdde0d5,36,16);
-  canopyLight.castShadow=true;canopyLight.shadow.mapSize.set(512,512);canopyLight.shadow.bias=-.002;
-  canopyLamp(scene,-2.3,3.27,-10.5,0xbbd6db,33,13);
-  const sign=group(shell,-7.2,.02,-12.4);
-  cylinder(sign,0,2.26,0,.115,.13,4.52,metal);
-  box(sign,0,4.5,0,2.8,1.04,.19,enamel);
-  const face=paint(sign,0,4.5,.105,2.67,.92,[['SIERRA',.47,.36],['M O T O R   O I L',.17,.76]],'#d0ba90','#942e1d');face.material.emissiveMap=face.material.map;face.material.emissive.set(0x8c7058);
-  paint(sign,0,3.58,.08,1.75,.70,[['REGULAR',.23,.2],['49 ⁹',.58,.68]],'#d6c7a5');
+  roadsideSign(shell,loader,filmTime,island);
   // Road edge, dashed centerline and ranch fencing.
   const road=loader.load(floorMap);road.colorSpace=T.SRGBColorSpace;road.wrapS=road.wrapT=T.RepeatWrapping;road.repeat.set(138,2);
   mesh(shell,roadSurface,wetPavementMaterial(0x686b68,{map:road,roughness:.63},filmTime),0,.013,0).rotation.x=-Math.PI/2;
@@ -282,5 +325,5 @@ export function station(scene,loader,filmTime,optics){
     box(shell,x,6.2,z,1.82,.12,.12,wood);
     if(i<7)for(const d of [-.72,.72])tube(shell,[[x+d,6.35,z],[x+10+d,5.53,z],[x+21+d,6.35,z]],.016,rubber);
   }
-  bake(shell);return {doors,puddles};
+  bake(shell);roomLightUVs(shell);return {doors,puddles,probeMaterials};
 }

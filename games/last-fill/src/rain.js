@@ -193,13 +193,13 @@ function fallingRain(scene,uniforms,rng,count,span,height,runoff=false){
           gl_Position=vec4(2.,2.,2.,1.);return;
         }
         float warm=lamp(p,vec2(-11.8,-19.66))+lamp(p,vec2(6.4,-19.66));
-        float tubes=tubeLight(p,vec2(3.66,-5.5))+tubeLight(p,vec2(3.66,-9.7))+
-                    tubeLight(p,vec2(-2.87,-5.5))+tubeLight(p,vec2(-2.87,-9.7));
+        float tubes=tubeLight(p,vec2(2.76,-5.5))+tubeLight(p,vec2(2.76,-9.7))+
+                    tubeLight(p,vec2(-1.97,-5.5))+tubeLight(p,vec2(-1.97,-9.7));
         float beamHeight=max(.1,beamCenter.y*2.);
         float beamRadius=mix(2.68,.90,clamp(y/beamHeight,0.,1.));
         float inBeam=(1.-smoothstep(beamRadius*.64,beamRadius,length(xz-beamCenter.xz)))*
                      (1.-smoothstep(beamHeight-.16,beamHeight,y));
-        illumination=vec3(.26,.31,.37)+warm*vec3(3.7,2.7,1.75)+tubes*vec3(1.2,1.17,.96)+
+        illumination=vec3(.19,.24,.30)+warm*vec3(3.7,2.7,1.75)+tubes*vec3(1.40,1.49,1.36)+
                      flash*vec3(.70,.83,1.)+beamStrength*inBeam*vec3(.74,1.65,1.84);
         // Integrate the projected bead over a short exposure. Out-of-focus
         // and subpixel drops spread the same light over a larger footprint.

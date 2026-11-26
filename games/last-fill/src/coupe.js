@@ -153,17 +153,13 @@ export function coupe(parent,loader){
     const a=k*2*Math.PI/3+.35;
     tube(car,[[driverX,.94,.2],[driverX+.13*Math.cos(a),.94+.124*Math.sin(a),.2-.040*Math.sin(a)]],.008,chrome);
   }
-  // The open rear-deck fuel door and exposed filler neck place the stop mid-refuel.
-  const filler=group(car,...deckPoint(0,-1.71));
-  cylinder(filler,0,.005,0,.103,.103,.009,windowTrim);
-  cylinder(filler,0,.010,0,.072,.072,.007,rubber);
-  const flap=group(filler,0,.009,-.101);flap.rotation.x=-1.76;
-  cylinder(flap,0,0,.098,.104,.104,.011,red);
-  cylinder(flap,0,-.008,.098,.087,.089,.007,metal);
-  box(flap,0,-.013,.045,.036,.012,.080,rubber);
-  const cap=group(car,...deckPoint(.217,-1.69));
-  cylinder(cap,0,.011,0,.044,.047,.021,windowTrim);
-  box(cap,0,.025,0,.058,.012,.014,metal);
+  // The closed, body-colored fuel door follows the deck crown. Its gasket is
+  // visible only as a narrow panel gap around the flush painted lid.
+  const fuelSeam=new T.RingGeometry(.101,.104,72);
+  fuelSeam.rotateX(-Math.PI/2);
+  const rim=fuelSeam.attributes.position;
+  for(let i=0;i<rim.count;i++)rim.setXYZ(i,...deckPoint(rim.getX(i),-1.71+rim.getZ(i)));
+  fuelSeam.computeVertexNormals();mesh(car,fuelSeam,rubber);
   bake(car);
   const shadowCanvas=document.createElement('canvas');shadowCanvas.width=shadowCanvas.height=128;
   const ctx=shadowCanvas.getContext('2d'),shade=ctx.createRadialGradient(64,64,0,64,64,64);

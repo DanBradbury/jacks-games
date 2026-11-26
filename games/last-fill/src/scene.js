@@ -38,12 +38,12 @@ export async function createScene(container,{pixelRatio}={}){
   const texturesReady=new Promise((res,rej)=>{resolveTextures=res;rejectTextures=rej});
   manager.onLoad=resolveTextures;manager.onError=url=>rejectTextures(new Error('Texture unavailable: '+url));
   const skyLoaded=new HDRLoader().loadAsync(panorama);
-  scene.fog=new T.FogExp2(0x41505e,.028);
-  scene.add(new T.HemisphereLight(0xabafc2,0x736960,.39));
-  const moon=new T.DirectionalLight(0xb9bacc,.28);moon.position.set(-15,22,-27);scene.add(moon);
+  scene.fog=new T.FogExp2(0x293542,.028);
+  scene.add(new T.HemisphereLight(0x9faec1,0x675c50,.27));
+  const moon=new T.DirectionalLight(0xb2c2d3,.19);moon.position.set(-15,22,-27);scene.add(moon);
   const flash={value:0},filmTime={value:0};
   const lens=cameraLens(renderer);
-  const {doors,puddles}=station(scene,loader,filmTime,lens.optics),car=coupe(scene,loader);
+  const {doors,puddles,probeMaterials}=station(scene,loader,filmTime,lens.optics),car=coupe(scene,loader);
   orchard(scene,loader,flash,cloudSource,filmTime);
   const animateStorm=storm(scene,flash),faceLights=streetLights(scene);
   const handsLoaded=hands(scene,doors),field=encounter(scene,loader);
@@ -63,7 +63,7 @@ export async function createScene(container,{pixelRatio}={}){
       float pocket=exp(-dot(offset*vec2(4.7,8.5),offset*vec2(4.7,8.5)));
       float sheet=exp(-dot(offset*2.4,offset*2.4));
       // Far trees and the low sky share the storm's horizon light.
-      vec3 sky=mix(mist,clouds*.80,.88*smoothstep(-.02,.54,n.y));
+      vec3 sky=mix(mist,clouds*.53,.88*smoothstep(-.02,.54,n.y));
       float vapor=dot(clouds,vec3(.21,.72,.07));
       sky+=flash*vec3(.78,.86,1.)*(vapor*(.12+1.8*sheet+7.*pocket)+.038*pocket);
       gl_FragColor=vec4(sky,1.);
@@ -73,7 +73,7 @@ export async function createScene(container,{pixelRatio}={}){
   skyDome.renderOrder=1;scene.add(skyDome);
   const [sky,,animateHands]=await Promise.all([skyLoaded,texturesReady,handsLoaded]);
   optimizeFixtureLighting(scene);
-  sky.mapping=T.EquirectangularReflectionMapping;scene.environment=sky;scene.environmentIntensity=.59;
+  sky.mapping=T.EquirectangularReflectionMapping;scene.environment=sky;scene.environmentIntensity=.42;
   scene.background=sky;scene.backgroundIntensity=.68;scene.backgroundRotation.y=1.8;scene.environmentRotation.y=1.8;
   // Capture canopy strips, pumps and sky from hood height for local paint reflections.
   const envTarget=new T.WebGLCubeRenderTarget(256,{type:T.HalfFloatType});
@@ -97,6 +97,16 @@ export async function createScene(container,{pixelRatio}={}){
     }
     o.material=finishes.get(o.material);
   });
+  // Capture the shop once. Brushed hardware, bottles and wax pick up the
+  // actual fluorescent bays, counter and dark window openings.
+  puddles.visible=false;probe.position.set(.1,1.42,3.15);
+  probe.update(renderer,scene);puddles.visible=true;
+  const shopEnvironment=pmrem.fromCubemap(envTarget.texture);
+  for(const material of probeMaterials){
+    material.envMap=shopEnvironment.texture;material.envMapIntensity=.82;
+    material.needsUpdate=true;
+  }
+  renderer.shadowMap.needsUpdate=true;
   envTarget.dispose();pmrem.dispose();
   const pos=new T.Vector3(),aim=new T.Vector3();
   const stage={craft:0,thunder:0},right=new T.Vector3(),soundDirection=new T.Vector3();

@@ -1,17 +1,27 @@
 import * as T from 'three';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {box, cylinder, group, link, mat, mesh, metal, paint, rubber, seed, tube} from './geometry.js';
+import {countertopOcclusion,roomSurfaces} from './shop-surfaces.js';
+import finishResponse from './shop-finish-response.webp';
 import finishesFile from './shop-finishes.jpg';
 import labelsFile from './shop-labels.jpg';
 
-function swatches(loader,file,cols,rows){
+function swatches(loader,file,cols,rows,responseFile){
   const materials=[],source=loader.load(file);
+  const response=responseFile?loader.load(responseFile):null;
   for(let row=0;row<rows;row++)for(let col=0;col<cols;col++){
     const map=source.clone();
     map.colorSpace=T.SRGBColorSpace;map.anisotropy=8;
     map.repeat.set(1/cols-.004,1/rows-.004);
     map.offset.set(col/cols+.002,1-(row+1)/rows+.002);
-    materials.push(mat(0xe7e1d5,{map,roughness:.66}));
+    const material=mat(0xe7e1d5,{map,roughness:.66});
+    if(response){
+      const field=response.clone();
+      field.repeat.copy(map.repeat);field.offset.copy(map.offset);field.anisotropy=8;
+      material.roughnessMap=material.bumpMap=field;
+      material.roughness=1;
+    }
+    materials.push(material);
   }
   return materials;
 }
@@ -88,12 +98,38 @@ function cooler(p,labels){
     box(cabinet,side*.525,.995,.414,.047,1.48,.18,red);
   }
   for(const y of [.331,1.703])box(cabinet,0,y,.50,.95,.049,.06,nickel);
-  const pane=mat(0xb6c9c4,{transparent:true,opacity:.065,depthWrite:false,roughness:.55});
+  // A recessed seal and a thin retaining flange give the cabinet glazing an edge.
+  for(const side of [-1,1])box(cabinet,side*.450,1.017,.525,.014,1.33,.011,softBlack);
+  for(const y of [.354,1.680])box(cabinet,0,y,.525,.912,.012,.011,softBlack);
+  const pane=new T.MeshPhysicalMaterial({color:0xc8d5cb,transparent:true,opacity:.078,
+    depthWrite:false,roughness:.17,ior:1.51,specularIntensity:.32});
   mesh(cabinet,new T.PlaneGeometry(.90,1.32),pane,0,1.02,.528);
   tube(cabinet,[[.434,.88,.528],[.435,.91,.591],[.435,1.12,.591],[.434,1.15,.528]],.012,nickel);
   for(let i=0;i<6;i++)box(cabinet,0,.069+i*.030,.342,.75,.008,.007,softBlack);
+  return pane;
 }
 
+// One atlas for the inset legends on the molded till keys.
+function keyLegends(keyboard){
+  const canvas=document.createElement('canvas');canvas.width=384;canvas.height=256;
+  const c=canvas.getContext('2d');c.textAlign='center';c.textBaseline='middle';
+  const legends=[['1','2','3','10','20','SUB'],['4','5','6','30','40','TAX'],
+    ['7','8','9','50','60','CASH'],['0','00','1/2','70','80','TOTAL']];
+  const positions=[],uv=[],indices=[];
+  for(const [r,row] of legends.entries())for(const [col,label] of row.entries()){
+    c.fillStyle=col<2||col===5?'#ede5cb':'#343029';
+    c.font='bold '+(label.length>2?21:32)+'px sans-serif';c.fillText(label,64*col+32,64*r+33);
+    const x=(col-2.5)*.048,z=(r-1.5)*.044,n=positions.length/3;
+    for(const [u,v] of [[0,0],[1,0],[1,1],[0,1]]){
+      positions.push(x+(u-.5)*.036,.027,z+(.5-v)*.028);uv.push((col+u)/6,1-(r+1-v)/4);
+    }
+    indices.push(n,n+1,n+2,n,n+2,n+3);
+  }
+  const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;map.anisotropy=4;
+  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(positions,3));
+  g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(indices);g.computeVertexNormals();
+  mesh(keyboard,g,mat(0xffffff,{map,alphaTest:.33,roughness:.76}));
+}
 function register(counter){
   const till=group(counter,.46,1.05,.20);till.rotation.y=.19;
   rolled(till,0,.069,0,.53,.138,.46,.023,softBlack);
@@ -106,6 +142,19 @@ function register(counter){
   const keys=[0x46413a,0xbdb498,0x996658].map(c=>mat(c));
   for(let r=0;r<4;r++)for(let c=0;c<6;c++)
     rolled(keyboard,(c-2.5)*.048,.014,(r-1.5)*.044,.038,.026,.032,.005,keys[c===5?2:c<2?1:0]);
+  keyLegends(keyboard);
+  box(till,0,.122,.208,.452,.005,.008,softBlack);
+  const plate=paint(till,.125,.169,.196,.103,.022,[['SIERRA  270',.55,.52]],'#49483d','#d1c7ac');
+  plate.rotation.x=.08;
+  // Paper emerges from a recessed slot on the operator's left.
+  box(till,-.167,.265,-.035,.065,.009,.068,softBlack);
+  const tape=new T.PlaneGeometry(.052,.085,1,8),tp=tape.attributes.position;
+  for(let i=0;i<tp.count;i++){
+    const y=tp.getY(i)+.0425;
+    tp.setXYZ(i,tp.getX(i),.042*Math.sin(y*25)+.18*y,-y);
+  }
+  tape.computeVertexNormals();
+  mesh(till,tape,mat(0xd9d1b5,{side:T.DoubleSide,roughness:.94}),-.167,.269,-.011);
   rolled(till,0,.313,-.152,.465,.136,.116,.031,agedCream);
   box(till,0,.327,-.087,.358,.075,.019,softBlack);
   paint(till,0,.329,-.076,.295,.054,[['0   0   0 . 0 0',.77,.53]],'#221f18','#dbc79b');
@@ -122,7 +171,7 @@ function taskLight(scene,x,y,z,color,intensity,targetX,targetZ){
 function serviceBoard(shell,walnut,labels){
   const board=group(shell,-4.90,1.56,1.98);board.rotation.y=Math.PI/2;
   box(board,0,0,0,1.72,1.02,.037,walnut);
-  const fiber=mat(0xa18c69,{roughness:.94});
+  const fiber=mat(0x957c50,{roughness:.94,bumpMap:walnut.bumpMap,bumpScale:.0016,lightMap:walnut.lightMap,lightMapIntensity:.78});
   box(board,0,0,.021,1.65,.95,.012,fiber);
   paint(board,.35,.341,.030,.70,.109,[['SERVICE  TICKETS',.54,.52]],'#d9c69a','#633d2d');
   for(let i=0;i<6;i++){
@@ -158,15 +207,24 @@ function serviceBoard(shell,walnut,labels){
 }
 
 export function shopInterior(shell,scene,loader){
-  const [vinyl,acoustic,walnut,laminate]=swatches(loader,finishesFile,2,2);
+  const {vinyl,bounce,brush,relief}=roomSurfaces(shell,loader);
+  const [,acoustic,walnut,laminate]=swatches(loader,finishesFile,2,2,finishResponse);
+  acoustic.color.setHex(0xe0e7e8);acoustic.bumpScale=.0016;
+  acoustic.lightMap=bounce;acoustic.lightMapIntensity=2.15;
+  walnut.bumpScale=.0006;laminate.bumpScale=.00012;
+  for(const material of [walnut,laminate,agedCream,red,softBlack]){
+    material.lightMap=bounce;material.lightMapIntensity=.75;
+  }
+  for(const material of [frame,nickel]){
+    material.bumpMap=brush;material.bumpScale=.00009;
+    material.roughnessMap=brush;material.roughness=.78;
+  }
+  agedCream.bumpMap=relief;agedCream.bumpScale=.00017;agedCream.roughnessMap=relief;
+  red.bumpMap=relief;red.bumpScale=.00012;red.roughness=.34;red.metalness=.08;
   const labels=swatches(loader,labelsFile,4,3),random=seed(1974);
-  // Fit actual tiles between narrow grout joints. Vary the grain direction by tile.
-  box(shell,0,.056,3.7,10,.036,7.5,mat(0x655f54));
-  const altVinyl=vinyl.clone();altVinyl.color.setHex(0x9d9f8d);
-  const tile=new T.PlaneGeometry(.608,.608);
-  for(let x=-8;x<=8;x++)for(let z=0;z<13;z++){
-    const face=mesh(shell,tile,(x+z)%2===0?vinyl:altVinyl,x*.612,.081,.29+z*.612);
-    face.rotation.set(-Math.PI/2,0,Math.PI*.5*Math.floor(random()*4));
+  for(const [i,label] of labels.entries()){
+    label.roughness=i<4?.68:i<8?.42:.88;
+    label.metalness=i>=4&&i<8?.14:0;
   }
   const tileFace=new T.PlaneGeometry(1.188,.588);
   box(shell,0,3.036,3.7,10.35,.19,7.85,frame);
@@ -174,9 +232,18 @@ export function shopInterior(shell,scene,loader){
     const face=mesh(shell,tileFace,acoustic,1.2*x,2.932,.18+.60*z);
     face.rotation.set(Math.PI/2,0,random()>.5?Math.PI:0);
   }
+  const tee=mat(0xb4b1a1,{roughness:.67,lightMap:bounce,lightMapIntensity:1.9});
+  for(let x=-4.2;x<4.91;x+=1.2)box(shell,x,2.929,3.69,.016,.014,7.3,tee);
+  for(let z=.48;z<7.32;z+=.60)box(shell,0,2.930,z,9.82,.012,.015,tee);
+  const reflector=mat(0xd4d2bd,{metalness:.12,roughness:.52,emissive:0x37392f});
   for(const z of [2.05,5.6]){
     const x=z<3?2.28:.95;
     box(shell,x,2.90,z,.35,.086,1.24,frame);
+    box(shell,x,2.855,z,.32,.013,1.18,reflector);
+    for(const side of [-1,1]){
+      const lip=box(shell,x+side*.154,2.843,z,.030,.025,1.18,reflector);
+      lip.rotation.z=side*.42;
+    }
     for(const dx of [-.082,.082]){
       link(shell,[x+dx,2.842,z-.55],[x+dx,2.842,z+.55],.014,.014,frosting);
       for(const end of [-1,1])box(shell,x+dx,2.85,z+end*.565,.051,.046,.037,agedCream);
@@ -185,10 +252,24 @@ export function shopInterior(shell,scene,loader){
   }
   const counter=group(shell,-2.37,0,3.36);counter.rotation.y=.07;
   box(counter,0,.15,0,2.49,.21,1.02,softBlack);
-  box(counter,0,.584,0,2.64,.815,1.10,walnut);
-  for(let x=-1.24;x<1.30;x+=.42)box(counter,x,.58,.555,.014,.79,.010,frame);
-  rolled(counter,0,1.009,0,2.76,.083,1.20,.024,laminate);
-  box(counter,0,.983,.603,2.70,.023,.009,nickel);
+  box(counter,0,.584,0,2.63,.813,1.094,walnut);
+  // Bookmatched veneer doors with separate grain runs and narrow shadow reveals.
+  for(let i=0;i<6;i++){
+    const g=new T.BoxGeometry(.435,.802,.018),uv=g.attributes.uv;
+    for(let j=0;j<uv.count;j++){
+      const u=uv.getX(j),v=uv.getY(j);
+      uv.setXY(j,.05+.89*v,(i%3+(i%2?1-u:u))/3);
+    }
+    mesh(counter,g,walnut,-1.10+i*.44,.585,.551);
+  }
+  laminate.aoMap=countertopOcclusion();
+  const edge=mat(0x4d3930,{roughness:.68});
+  rolled(counter,0,.976,0,2.75,.022,1.19,.008,edge);
+  const top=rolled(counter,0,1.010,0,2.76,.081,1.20,.019,laminate);
+  const {position,uv}=top.geometry.attributes;
+  for(let i=0;i<uv.count;i++)uv.setXY(i,position.getX(i)/2.76+.5,.5-position.getZ(i)/1.20);
+  box(counter,0,.990,.598,2.71,.032,.013,nickel);
+  for(const y of [.983,.994])box(counter,0,y,.606,2.69,.002,.002,frame);
   register(counter);
   // Paper map stack, pen cup, till receipt and display tins give the countertop scale.
   for(let i=0;i<4;i++){
@@ -209,11 +290,12 @@ export function shopInterior(shell,scene,loader){
   deskLamp.shadow.bias=-.0003;
   serviceBoard(shell,walnut,labels);
 
-
   stockRack(shell,2.59,1.48,-.74,2.42,[4,5,10,8,9,7],labels,random);
   stockRack(shell,-3.67,1.10,.45,1.97,[6,7,8,9,4],labels,random);
-  cooler(shell,labels);
-  const matting=mat(0x302e29,{roughness:.98});
+  const coolerPane=cooler(shell,labels);
+  const matting=mat(0x302e29,{roughness:.94,bumpMap:relief,bumpScale:.0009});
+  const ribs=mat(0x48463a,{roughness:.93,bumpMap:relief,bumpScale:.001});
   rolled(shell,0,.090,.72,1.91,.016,1.00,.007,matting);
-  for(let i=0;i<38;i++)box(shell,0,.100,.249+i*.025,1.82,.006,.007,softBlack);
+  for(let i=0;i<38;i++)box(shell,0,.100,.249+i*.025,1.82,.006,.007,ribs);
+  return {probeMaterials:[vinyl,laminate,walnut,nickel,frame,red,coolerPane,...drinks],doorMetal:mat(0xb7b8ae,{metalness:.83,roughness:.62,roughnessMap:brush,bumpMap:brush,bumpScale:.00013})};
 }

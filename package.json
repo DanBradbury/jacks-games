@@ -13,7 +13,9 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "deploy:coloring": "npm run deploy -w @jack-games/coloring",
     "deploy:dice-dungeon": "npm run deploy -w @jack-games/dice-dungeon",
-    "dev:last-fill": "npm run dev -w @jack-games/last-fill"
+    "dev:last-fill": "npm run dev -w @jack-games/last-fill",
+    "dev:punchline": "npm run dev -w @jack-games/punchline",
+    "deploy:punchline": "npm run deploy -w @jack-games/punchline"
   },
   "devDependencies": {
     "typescript": "5.6.3",

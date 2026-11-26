@@ -1,0 +1,20 @@
+{
+  "name": "@jack-games/punchline",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite build && npx --yes wrangler@4 dev --ip 0.0.0.0",
+    "build": "tsc -p . && tsc -p worker && vite build",
+    "typecheck": "tsc -p . && tsc -p worker",
+    "test": "node --experimental-strip-types --no-warnings worker/game.test.ts",
+    "package": "npm run build && npm test",
+    "deploy": "npm run build && npx --yes wrangler@4 deploy"
+  },
+  "dependencies": {
+    "@jack-games/kit": "*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261101.1"
+  }
+}

@@ -80,8 +80,8 @@ export function lacquer(){
   const grain=new T.DataTexture(normal,size,size);
   grain.wrapS=grain.wrapT=T.RepeatWrapping;grain.generateMipmaps=true;
   grain.minFilter=T.LinearMipmapLinearFilter;grain.magFilter=T.LinearFilter;grain.needsUpdate=true;
-  const finish=new T.MeshPhysicalMaterial({color:0x792922,metalness:.045,roughness:.48,
-    clearcoat:.53,clearcoatRoughness:.255,clearcoatNormalMap:grain,clearcoatNormalScale:new T.Vector2(.18,.18),
+  const finish=new T.MeshPhysicalMaterial({color:0x792922,metalness:.045,roughness:.51,
+    clearcoat:.39,clearcoatRoughness:.30,clearcoatNormalMap:grain,clearcoatNormalScale:new T.Vector2(.18,.18),
     side:T.DoubleSide});
   finish.onBeforeCompile=shader=>{
     const coordinates='varying vec3 paintPoint,paintAcross,paintAlong;\n';

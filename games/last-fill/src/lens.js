@@ -36,7 +36,7 @@ export function cameraLens(renderer){
     gl_FragColor=vec4(blurSource(src,vec2(texel.x,0.)),1.);
   }`,{src:{value:bright.texture},texel:{value:texel}});
   const finish=pass(blur+composite+`uniform sampler2D glow;uniform vec2 texel;void main(){
-    vec3 c=sceneColor()+blurSource(glow,vec2(0.,texel.y))*.21;
+    vec3 c=sceneColor()+blurSource(glow,vec2(0.,texel.y))*.16;
     gl_FragColor=vec4(c,1.);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>

@@ -7,7 +7,13 @@ import {group,mesh,mat,metal,rubber,chrome,box,oval,link,tube,cylinder,paint,bak
 import concreteFile from '../../night-shift/src/scans/concrete_floor_damaged_01_Diffuse.jpg';
 import floorMap from './worn_asphalt.jpg';
 import pastureMap from './rocky_terrain_02.jpg';
-import roofMap from './corrugated_iron_02.jpg';
+import roofMap from './canopy-panels.webp';
+import concreteNormal from '../../night-shift/src/scans/concrete_floor_damaged_01_nor_gl.jpg';
+import concreteRough from '../../night-shift/src/scans/concrete_floor_damaged_01_Rough.jpg';
+import jointsFile from './apron-joints.webp';
+import gravelColor from './gravel-diff.jpg';
+import gravelNormal from './gravel-nor_gl.jpg';
+import gravelResponse from './gravel-arm.jpg';
 import {roomLightUVs} from './shop-surfaces.js';
 import {shopInterior} from './shop.js';
 import {stationFinishes,serviceBay,cladWall} from './service-bay.js';
@@ -17,7 +23,7 @@ import {wetPane} from './rain.js';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import floorNormal from './asphalt-normal.jpg';
 
-const ivory=mat(0xb8b6a1),enamel=mat(0xa53d29,{roughness:.63}),trim=mat(0x425047,{metalness:.22,roughness:.66}),fluoro=mat(0xc5cdc5,{emissive:0xeaf4e9,emissiveIntensity:2.65});
+const ivory=mat(0xb8b6a1),enamel=mat(0xa53d29,{roughness:.63}),trim=mat(0x425047,{metalness:.22,roughness:.66}),fluoro=mat(0xc5cdc5,{emissive:0xeaf4e9,emissiveIntensity:1.85});
 [ivory,enamel,trim].forEach(m=>weather(m,.86));
 const postRows=[-2.87,3.66],postBays=[-5.5,-9.7];
 const fixtureX=post=>post+(post<0?.90:-.90);
@@ -32,14 +38,15 @@ function canopyCeiling(map){
     let bounce=.07;
     for(const post of postRows)for(const bay of postBays){
       const dx=worldX-fixtureX(post),dz=worldZ-bay;
-      bounce+=.13/(1+.24*(dx*dx+dz*dz))+.40*Math.exp(-4*dx*dx-2*dz*dz);
+      const pastTubeEnd=Math.max(0,Math.abs(dz)-.61);
+      bounce+=.13/(1+.24*(dx*dx+dz*dz))+.40*Math.exp(-2*dx*dx-2*pastTubeEnd*pastTubeEnd);
     }
     const i=(y*res+x)*4;
     data[i]=bounce*246;data[i+1]=bounce*240;data[i+2]=bounce*219;data[i+3]=255;
   }
   const lightMap=new T.DataTexture(data,res,res);
   lightMap.channel=0;lightMap.magFilter=lightMap.minFilter=T.LinearFilter;lightMap.needsUpdate=true;
-  return mat(0xd2d0c7,{map,roughness:.85,lightMap,lightMapIntensity:1.45});
+  return mat(0xd2d0c7,{map,roughness:.85,lightMap,lightMapIntensity:2.65});
 }
 
 function pump(p,x,z,n,finish){
@@ -100,6 +107,20 @@ const surfaceRain=`
     return smoothstep(-.8,.30,max(canopy.x,canopy.y))*smoothstep(-.07,.18,max(store.x,store.y))*
            smoothstep(-.12,.18,max(garage.x,garage.y));
   }
+  uniform sampler2D slabWear;
+  vec3 pavementWear(vec2 p){
+    vec2 uv=(p-vec2(-5.2,-.10))/vec2(13.1,-13.7);
+    if(any(lessThan(uv,vec2(0.)))||any(greaterThan(uv,vec2(1.))))return vec3(0.,0.,noiseAt(p*.63));
+    return texture2D(slabWear,uv).rgb;
+  }
+  float pooledWater(vec2 p,float exposure,vec3 wear){
+    // Wind wets the margins. Tires also carry water under the roof,
+    // where it stays in low spots and drains into the expansion joints.
+    float tracks=exp(-pow(abs(abs(p.x-.85)-.80)/.48,2.));
+    float supply=mix(.19+.30*tracks,1.,exposure);
+    float basin=.75*wear.b+.25*noiseAt(p*1.73);
+    return supply*smoothstep(.58-.20*supply,.75-.15*supply,basin+wear.g*.14);
+  }
   vec2 waveSlope(vec2 cell,float time){
     vec2 id=floor(cell);
     float phase=time*mix(1.25,2.9,hash(id))+hash(id+31.)*12.;
@@ -117,16 +138,20 @@ const surfaceRain=`
     return waveSlope(p*3.7,clock)*.31+transpose(turn)*fine*.21;
   }`;
 
-function wetPavementMaterial(color,props,filmTime){
+function wetPavementMaterial(color,props,filmTime,wear){
   const surface=mat(color,props);
   surface.onBeforeCompile=shader=>{
-    shader.uniforms.clock=filmTime;
+    shader.uniforms.clock=filmTime;shader.uniforms.slabWear={value:wear};
     shader.vertexShader='varying vec2 land;\n'+shader.vertexShader.replace('#include <begin_vertex>',
       '#include <begin_vertex>\nland=(modelMatrix*vec4(position,1.)).xz;');
     shader.fragmentShader='varying vec2 land;\n'+surfaceRain+'\n'+shader.fragmentShader;
-    shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
-      float waterFilm=exposureAt(land)*(.28+.72*smoothstep(.26,.78,noiseAt(land*.61)));
-      roughnessFactor=mix(roughnessFactor,.36,waterFilm);`)
+    shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`#include <map_fragment>
+      vec3 wear=pavementWear(land);
+      float waterFilm=pooledWater(land,exposureAt(land),wear);
+      diffuseColor.rgb*=1.-.32*waterFilm-.45*wear.r;
+      diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*vec3(1.25,1.17,1.09),wear.g*(1.-wear.r));`)
+      .replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
+      roughnessFactor=mix(roughnessFactor,.26,waterFilm);`)
       .replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
         vec2 slope=rainSlope(land)*waterFilm;
         normal=normalize(normal+mat3(viewMatrix)*vec3(-slope.x,0.,-slope.y));`);
@@ -134,35 +159,25 @@ function wetPavementMaterial(color,props,filmTime){
   return surface;
 }
 
-function pavement(scene,loader,roadSurface,filmTime){
+function pavement(scene,loader,roadSurface,filmTime,wear){
   const diffuse=loader.load(floorMap),normal=loader.load(floorNormal);
   for(const t of [diffuse,normal]){t.wrapS=t.wrapT=T.RepeatWrapping;t.repeat.set(12,10);t.anisotropy=4}
   diffuse.colorSpace=T.SRGBColorSpace;
   const lot=new T.PlaneGeometry(36,29.1).translate(0,.55,0);
-  const base=mesh(scene,lot,wetPavementMaterial(0x605e58,{map:diffuse,normalMap:normal,roughness:.86,normalScale:new T.Vector2(.40,.40)},filmTime),0,-.009,0);
+  const base=mesh(scene,lot,wetPavementMaterial(0x605e58,{map:diffuse,normalMap:normal,roughness:.86,normalScale:new T.Vector2(.40,.40)},filmTime,wear),0,-.009,0);
   base.rotation.x=-Math.PI/2;
-  const slab=loader.load(concreteFile);slab.colorSpace=T.SRGBColorSpace;slab.anisotropy=6;
-  slab.wrapS=slab.wrapT=T.RepeatWrapping;slab.repeat.set(3.9,3.05);
-  const apron=mesh(scene,new T.PlaneGeometry(13.1,13.7),
-    wetPavementMaterial(0x9a978e,{map:slab,normalMap:normal,normalScale:new T.Vector2(.21,.21),roughness:.88},filmTime),1.35,-.003,-6.95);
-  apron.rotation.x=-Math.PI/2;
-  const gaps=group(scene),tar=mat(0x332f2b,{roughness:.73});
-  for(const x of [-4.95,-1.60,1.8,5.14])box(gaps,x,.001,-6.95,.011,.004,13.64,tar);
-  for(const z of [-.50,-3.79,-7.21,-10.52,-13.72])box(gaps,1.35,.001,z,13.1,.005,.013,tar);
-  const random=seed(584);
-  for(let i=0;i<25;i++){
-    let x=-4.99+random()*12.6,z=-.33-random()*11.5;
-    const fissure=[[x,.004,z]],angle=random()*Math.PI*2;
-    for(let j=0;j<7;j++){
-      x+=.14*Math.cos(angle)+(random()-.5)*.25;z+=.18*Math.sin(angle)+(random()-.5)*.21;
-      fissure.push([x,.004,z]);
-    }
-    tube(gaps,fissure,.0035+random()*.005,tar);
+  const slab=loader.load(concreteFile),relief=loader.load(concreteNormal),rough=loader.load(concreteRough);
+  slab.colorSpace=T.SRGBColorSpace;
+  for(const map of [slab,relief,rough]){
+    map.wrapS=map.wrapT=T.RepeatWrapping;map.repeat.set(4.4,4.6);map.anisotropy=8;
   }
-  bake(gaps);
+  const apron=mesh(scene,new T.PlaneGeometry(13.1,13.7),
+    wetPavementMaterial(0xc4bfb4,{map:slab,normalMap:relief,normalScale:new T.Vector2(.67,.67),
+      roughnessMap:rough,roughness:.96},filmTime,wear),1.35,-.003,-6.95);
+  apron.rotation.x=-Math.PI/2;
   const shader=Reflector.ReflectorShader;
   const wet=new Reflector(mergeGeometries([lot,roadSurface]),{textureWidth:768,textureHeight:448,multisample:0,clipBias:.004,shader:{
-    uniforms:{...shader.uniforms,relief:{value:null},clock:{value:0},fogDensity:{value:scene.fog.density}},
+    uniforms:{...shader.uniforms,relief:{value:null},slabWear:{value:wear},clock:{value:0},fogDensity:{value:scene.fog.density}},
     vertexShader:shader.vertexShader.replace('uniform mat4 textureMatrix;','uniform mat4 textureMatrix; varying vec3 groundPoint;').replace('vUv =','groundPoint=(modelMatrix*vec4(position,1.)).xyz; vUv ='),
     fragmentShader:surfaceRain+`uniform sampler2D tDiffuse,relief;uniform float fogDensity;varying vec4 vUv;varying vec3 groundPoint;
     void main(){vec2 land=groundPoint.xz;
@@ -171,9 +186,8 @@ function pavement(scene,loader,roadSurface,filmTime){
       float exposure=exposureAt(land);
       vec2 shopEdge=abs(land-vec2(0.,3.7))-vec2(5.,3.7);
       float outdoors=smoothstep(-.12,.35,max(shopEdge.x,shopEdge.y));
-      float basin=.59*noiseAt(land*.47)+.29*noiseAt(land*1.47)+.12*noiseAt(land*5.2);
-      float damp=smoothstep(mix(.69,.42,exposure),mix(.85,.69,exposure),basin);
-      float wetness=outdoors*mix(.24,1.,exposure)*damp;
+      float damp=pooledWater(land,exposure,pavementWear(land));
+      float wetness=outdoors*damp;
       vec2 ripple=rainSlope(land)*exposure*damp;
       if(wetness<.005)discard;
       vec2 uv=vUv.xy/vUv.w+n*mix(.031,.004,damp)+ripple*.026;
@@ -185,7 +199,7 @@ function pavement(scene,loader,roadSurface,filmTime){
       float facing=clamp(dot(normalize(cameraPosition-groundPoint),surfaceNormal),0.,1.);
       float fresnel=.02+.98*pow(1.-facing,5.);
       float visibility=exp(-fogDensity*fogDensity*dot(cameraPosition-groundPoint,cameraPosition-groundPoint));
-      gl_FragColor=vec4(r,wetness*fresnel*.79*visibility);
+      gl_FragColor=vec4(r,wetness*fresnel*.72*visibility);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }`
@@ -197,7 +211,8 @@ function pavement(scene,loader,roadSurface,filmTime){
 export function station(scene,loader,filmTime,optics){
   RectAreaLightUniformsLib.init();
   const roadSurface=roadStrip(5.8);
-  const puddles=pavement(scene,loader,roadSurface,filmTime);
+  const wear=loader.load(jointsFile);wear.anisotropy=8;
+  const puddles=pavement(scene,loader,roadSurface,filmTime,wear);
   const shell=group(scene),rng=seed(74),finish=stationFinishes(loader,filmTime);
   serviceBay(shell,scene,finish);
   // Low specular response keeps point lights from blooming into opaque disks on the shop windows.
@@ -237,7 +252,7 @@ export function station(scene,loader,filmTime,optics){
     if(s===1)paint(door,cx,1.76,-.025,.45,.20,[['OPEN',.73,.51]],'#354940','#f1dbad',true);
     bake(door);doors.push(door);
   }
-  const soffit=loader.load(roofMap);soffit.colorSpace=T.SRGBColorSpace;soffit.wrapS=soffit.wrapT=T.RepeatWrapping;soffit.repeat.set(4,4);
+  const soffit=loader.load(roofMap);soffit.colorSpace=T.SRGBColorSpace;soffit.anisotropy=8;
   box(shell,1.5,3.596,-7.55,10.18,.035,8.98,canopyCeiling(soffit));
   for(const x of [-2.8,.07,3.64,6.2])box(shell,x,3.545,-7.55,.07,.10,8.9,trim);
   box(shell,1.5,3.77,-7.55,10.2,.31,9.0,ivory);
@@ -256,6 +271,9 @@ export function station(scene,loader,filmTime,optics){
     for(const z of postBays){
       box(shell,x,1.83,z,.18,3.56,.22,ivory);
       box(shell,x,.48,z,.205,.69,.245,trim);
+      box(shell,x,.18,z,.285,.024,.327,finish.foot);
+      for(const dx of [-.117,.117])for(const dz of [-.141,.141])
+        cylinder(shell,x+dx,.20,z+dz,.012,.014,.018,metal,6);
       const lampX=fixtureX(x);
       link(shell,[x,3.12,z],[x+.46,3.55,z],.035,.035,trim);
       link(shell,[x,3.12,z],[x-.46,3.55,z],.035,.035,trim);
@@ -266,12 +284,12 @@ export function station(scene,loader,filmTime,optics){
         link(shell,[lampX+dx,3.409,z-.61],[lampX+dx,3.409,z+.61],.018,.018,fluoro);
         for(const dz of [-.63,.63])box(shell,lampX+dx,3.414,z+dz,.06,.068,.06,ivory);
       }
-      const strip=new T.RectAreaLight(0xe3eee3,34,.25,1.22);
+      const strip=new T.RectAreaLight(0xe3eee3,26,.25,1.22);
       strip.position.set(lampX,3.405,z);strip.rotation.x=-Math.PI/2;scene.add(strip);
       // Shadowed contribution from the near ballast bay anchors the car and
       // islands. The broad penumbra follows the cutoff of the steel reflector.
       if(x>0&&z===-5.5){
-        const lamp=new T.SpotLight(0xe3eee3,6,12,1.06,.76,2);
+        const lamp=new T.SpotLight(0xe3eee3,4.6,12,1.06,.76,2);
         lamp.position.copy(strip.position);lamp.target.position.set(lampX-.36,0,z-.4);
         lamp.castShadow=true;lamp.shadow.mapSize.set(512,512);
         lamp.shadow.camera.near=.25;lamp.shadow.bias=-.0007;lamp.shadow.normalBias=.014;
@@ -283,8 +301,44 @@ export function station(scene,loader,filmTime,optics){
   roadsideSign(shell,loader,filmTime,island);
   // Road edge, dashed centerline and ranch fencing.
   const road=loader.load(floorMap);road.colorSpace=T.SRGBColorSpace;road.wrapS=road.wrapT=T.RepeatWrapping;road.repeat.set(138,2);
-  mesh(shell,roadSurface,wetPavementMaterial(0x686b68,{map:road,roughness:.63},filmTime),0,.013,0).rotation.x=-Math.PI/2;
-  const line=mat(0xbeb995);
+  mesh(shell,roadSurface,wetPavementMaterial(0x686b68,{map:road,roughness:.77},filmTime,wear),0,.013,0).rotation.x=-Math.PI/2;
+  // Loose aggregate collects at the crumbling edge of the pavement.
+  const gravel=loader.load(gravelColor),grit=loader.load(gravelNormal),arm=loader.load(gravelResponse);
+  gravel.colorSpace=T.SRGBColorSpace;
+  for(const map of [gravel,grit,arm]){
+    map.wrapS=map.wrapT=T.RepeatWrapping;map.anisotropy=6;
+  }
+  const shoulder=mat(0x9d9a95,{map:gravel,normalMap:grit,normalScale:new T.Vector2(.72,.72),
+    aoMap:arm,roughnessMap:arm,roughness:.89});
+  shoulder.onBeforeCompile=shader=>{
+    shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`#include <map_fragment>
+      vec2 p=vMapUv/.91;
+      float center=-18.+sign(p.x)*17.*smoothstep(30.,144.,abs(p.x));
+      float driveway=(1.-smoothstep(3.,10.,abs(p.x)))*step(center,p.y);
+      float bank=texture2D(roughnessMap,p*.14).r;
+      float aggregate=texture2D(roughnessMap,vMapUv).r;
+      float edge=.28+.27*sin(p.x*1.27)+.16*cos(p.x*3.72)+.34*bank-.25*driveway;
+      if(abs(p.y-center)-2.88>edge+.27*(aggregate-.5))discard;
+      diffuseColor.rgb=mix(vec3(dot(diffuseColor.rgb,vec3(.21,.72,.07))),diffuseColor.rgb,.58)*(.55+.22*bank);`);
+  };
+  for(const side of [-1,1]){
+    const strip=roadStrip(1,side*3.38),pos=strip.attributes.position,uv=strip.attributes.uv;
+    for(let i=0;i<pos.count;i++){
+      const x=pos.getX(i),z=-pos.getY(i);
+      uv.setXY(i,x*.91,z*.91);
+    }
+    mesh(shell,strip,shoulder,0,.009,0).rotation.x=-Math.PI/2;
+  }
+  const line=mat(0xc8bf9e,{roughness:.88});
+  line.onBeforeCompile=shader=>{
+    shader.vertexShader='varying vec2 stripePoint;\n'+shader.vertexShader.replace('#include <begin_vertex>',
+      '#include <begin_vertex>\nstripePoint=(modelMatrix*vec4(transformed,1.)).xz;');
+    shader.fragmentShader='varying vec2 stripePoint;uniform sampler2D roadGrain;\n'+shader.fragmentShader
+      .replace('#include <color_fragment>',`#include <color_fragment>
+        float abrasion=texture2D(roadGrain,stripePoint*.82).r;
+        diffuseColor.rgb*=.26+.74*smoothstep(.020,.089,abrasion);`);
+    shader.uniforms.roadGrain={value:road};
+  };
   for(let x=-213;x<216;x+=6){
     const dz=roadCenterZ(x+1.4)-roadCenterZ(x-1.4);
     box(shell,x,.017,roadCenterZ(x),Math.hypot(2.8,dz),.005,.085,line).rotation.y=-Math.atan2(dz,2.8);
@@ -306,14 +360,23 @@ export function station(scene,loader,filmTime,optics){
   const blades=[],colors=[];
   for(let i=0;i<11200;i++){
     const x=(rng()-.5)*102;
-    const verge=i<1450,z=roadCenterZ(x)+(verge?2.9+.07*Math.sin(x*1.3)+(rng()-.5)*.28:-3.1-rng()*37);
-    const h=verge?(.03+rng()*.14)*(.45+.45*Math.sin(x*1.6)+.23*Math.cos(x*.4)):.09+rng()*.28;
+    const verge=i<1450,z=roadCenterZ(x)+(verge?3.38+.22*Math.sin(x*1.3)+(rng()-.5)*.48:-3.1-rng()*37);
+    const h=verge?(.03+rng()*.18)*Math.max(.1,.51+.42*Math.sin(x*1.6)+.21*Math.cos(x*.4)):.09+rng()*.28;
     const base=verge?0:groundHeight(x,z);
     for(let j=0;j<4;j++){
       const a=rng()*Math.PI*2,bend=.03+rng()*.115,dx=Math.cos(a),dz=Math.sin(a);
-      blades.push(x-.016*dz,base,z+.016*dx,x+.016*dz,base,z-.016*dx,x+bend*dx,base+h*(.67+rng()*.72),z+bend*dz);
+      const tall=h*(.67+rng()*.72);
       const tip=.20+rng()*.28;
-      colors.push(.065,.071,.044,.11,.12,.065,tip*.86,tip,tip*.48);
+      const rootA=[x-.013*dz,base,z+.013*dx],rootB=[x+.013*dz,base,z-.013*dx];
+      const end=[x+bend*dx+.019,base+tall,z+bend*dz];
+      if(verge){
+        const knee=[x+.33*bend*dx,base+tall*.70,z+.33*bend*dz];
+        blades.push(...rootA,...rootB,...knee,...rootB,...end,...knee);
+        colors.push(.05,.053,.025,.08,.087,.042,.22,.21,.085,.08,.087,.042,tip,tip*.90,tip*.49,.22,.21,.085);
+      }else{
+        blades.push(...rootA,...rootB,...end);
+        colors.push(.065,.071,.044,.11,.12,.065,tip*.86,tip,tip*.48);
+      }
     }
   }
   const geom=new T.BufferGeometry();geom.setAttribute('position',new T.Float32BufferAttribute(blades,3));geom.setAttribute('color',new T.Float32BufferAttribute(colors,3));geom.computeVertexNormals();

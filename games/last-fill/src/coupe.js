@@ -3,16 +3,17 @@ import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js'
 import {group,mesh,mat,rubber,metal,chrome,box,oval,tube,panel,cylinder,bake} from './geometry.js';
 
 import {bodyShell,deckPoint,lacquer,noseDepth,rearHardware,sidePoint} from './coupe-body.js';
+import wheelResponse from './wheel-response.webp';
 import wheelImage from './rally-wheel.jpg';
 
 // Revolve a radial profile while projecting the photographed face onto the dish and sidewall.
-function rallyWheel(parent,map){
+function rallyWheel(parent,finish){
   const profile=[[.005,.106],[.068,.143],[.090,.132],[.112,.093],[.16,.078],[.213,.101],[.226,.112],
     [.240,.104],[.277,.110],[.316,.099],[.337,.079],[.347,.051],[.349,-.062],[.335,-.097]];
   const shape=new T.LatheGeometry(profile.map(([r,y])=>new T.Vector2(r,y)),80);
   const pos=shape.attributes.position,uv=shape.attributes.uv;
   for(let i=0;i<pos.count;i++)uv.setXY(i,.5+pos.getX(i)/.70,.5+pos.getZ(i)/.70);
-  mesh(parent,shape,mat(0xe8e4da,{map,metalness:.18,roughness:.44,side:T.DoubleSide}));
+  mesh(parent,shape,finish);
 }
 function skin(parent,sample,finish,across=24,along=12){
   const vertices=[],uv=[],idx=[];
@@ -36,10 +37,13 @@ function panelGap(car,landmarks,surface,radius){
 }
 export function coupe(parent,loader){
   const wheels=loader.load(wheelImage);wheels.colorSpace=T.SRGBColorSpace;wheels.anisotropy=4;
+  const wheelFinish=loader.load(wheelResponse);wheelFinish.anisotropy=6;
+  const wheelMaterial=mat(0xdfdcd4,{map:wheels,metalnessMap:wheelFinish,metalness:.74,roughnessMap:wheelFinish,
+    roughness:1,bumpMap:wheelFinish,bumpScale:.00075,side:T.DoubleSide});
   const car=group(parent,2.03,.012,-7.3);
   car.rotation.y=Math.PI-.09;
   const red=lacquer();
-  const glass=new T.MeshPhysicalMaterial({color:0x526363,ior:1.51,roughness:.12,specularIntensity:.24,
+  const glass=new T.MeshPhysicalMaterial({color:0x526363,ior:1.51,roughness:.16,specularIntensity:.21,
     transparent:true,depthWrite:false,opacity:.26,side:T.DoubleSide});
   const windowTrim=mat(0xa4a5a1,{metalness:.84,roughness:.39});
   const leather=mat(0x382622),amber=mat(0xb67324,{roughness:.29}),reflector=mat(0x84241b,{roughness:.28});
@@ -58,7 +62,7 @@ export function coupe(parent,loader){
       // Recessed wheel tubs block daylight through the opposite arch.
       const liner=cylinder(car,s*.755,.353,z,.393,.393,.178,rubber,64);liner.rotation.z=Math.PI/2;
       const wheel=group(car,s*.84,.355,z);wheel.rotation.z=-s*Math.PI/2;
-      rallyWheel(wheel,wheels);
+      rallyWheel(wheel,wheelMaterial);
     }
     const onSide=(y,z,offset)=>sidePoint(s,y,z,offset);
     tube(car,[[-.94,.29],[-.73,.274],[0,.263],[.68,.274],[.90,.29]].map(([z,y])=>onSide(y,z,.002)),.012,windowTrim);

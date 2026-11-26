@@ -43,6 +43,8 @@ const bottleBody=new T.LatheGeometry([
 const drinks=[0x31221b,0x35422c,0x774021,0x37261c].map(color=>mat(color,{metalness:.18,roughness:.14}));
 const labelBand=new T.CylinderGeometry(.033,.032,.066,18,1,true);
 const canBody=new T.CylinderGeometry(.059,.059,.145,24,1,true);
+const canBead=new T.TorusGeometry(.046,.0014,5,28);
+const board=mat(0xbca788,{roughness:.94});
 const canLid=new T.CylinderGeometry(.060,.060,.005,24);
 function product(p,x,y,z,kind,labels,angle){
   const item=group(p,x,y,z);item.rotation.y=angle;
@@ -53,9 +55,11 @@ function product(p,x,y,z,kind,labels,angle){
   }else if(kind<8){
     mesh(item,canBody,labels[kind],0,.075,0);
     mesh(item,canLid,nickel,0,.003,0);mesh(item,canLid,nickel,0,.148,0);
+    mesh(item,canBead,nickel,0,.151,0).rotation.x=Math.PI/2;
   }else{
     const h=kind===8?.255:.188,w=kind===11?.119:.145;
-    box(item,0,h/2,0,w,h,.056,agedCream);
+    box(item,0,h/2,0,w,h,.056,board);
+    box(item,0,h+.0008,-.010,w-.001,.0015,.035,board);
     mesh(item,new T.PlaneGeometry(w-.002,h-.003),labels[kind],0,h/2,.0285);
   }
 }

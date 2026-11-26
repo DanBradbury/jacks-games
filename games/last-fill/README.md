@@ -13,7 +13,7 @@ With Google Chrome and FFmpeg installed, run `npm run render:film -w @jack-games
 ## Assets
 
 - The reference for pacing and atmosphere was Jav's [The Abduction](https://x.com/javpixel_art/status/2125403467942654008).
-- HDR illumination and surface scans are bundled from Poly Haven under CC0. [Moonless Golf](https://polyhaven.com/a/moonless_golf), [Worn Asphalt](https://polyhaven.com/a/worn_asphalt), [Rocky Terrain 02](https://polyhaven.com/a/rocky_terrain_02), [Corrugated Iron 02](https://polyhaven.com/a/corrugated_iron_02), [Cracked Concrete Wall](https://polyhaven.com/a/cracked_concrete_wall), [Concrete Floor Damaged 01](https://polyhaven.com/a/concrete_floor_damaged_01).
+- HDR illumination and surface scans are bundled from Poly Haven under CC0. [Moonless Golf](https://polyhaven.com/a/moonless_golf), [Worn Asphalt](https://polyhaven.com/a/worn_asphalt), [Rocky Terrain 02](https://polyhaven.com/a/rocky_terrain_02), [Gravel Floor](https://polyhaven.com/a/gravel_floor), [Corrugated Iron 02](https://polyhaven.com/a/corrugated_iron_02), [Cracked Concrete Wall](https://polyhaven.com/a/cracked_concrete_wall), [Concrete Floor Damaged 01](https://polyhaven.com/a/concrete_floor_damaged_01).
 - Hands use the generic hand meshes from [WebXR Input Profiles](https://github.com/immersive-web/webxr-input-profiles/tree/main/packages/assets/profiles/generic-hand). The MIT license accompanies the bundle.
 - The title artwork, storm clouds, leaf spray, hand albedo, shop finishes, product labels, cow hide, pump details, and rally wheel textures are generated images. The store, doors, car, pumps, craft, cow and beam use local Three.js geometry.
 

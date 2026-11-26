@@ -1,4 +1,5 @@
 import * as T from 'three';
+import alloyFile from './saucer-alloy.webp';
 import hideFile from './holstein.jpg';
 import {group,mesh,mat,rubber,metal,chrome,box,oval,link,tube,cylinder,bake,seed,smooth} from './geometry.js';
 
@@ -61,11 +62,13 @@ function cow(parent,loader){
   cattleHide(animal,flank);
   oval(animal,1.554,.984,0,.102,.084,.144,nose).rotation.z=-.36;
   oval(animal,-.59,.60,.01,.216,.143,.193,mat(0xa9887c));
-  const legs=[];
+  const legs=[],ears=[];
   for(const s of [-1,1]){
     oval(animal,1.614,.997,s*.100,.027,.020,.012,hoof);
     oval(animal,1.302,1.27,s*.174,.037,.039,.020,rubber);
-    oval(animal,1.14,1.39,s*.228,.113,.053,.139,coat).rotation.z=.25;
+    const ear=group(parent,1.14,1.39,s*.13);
+    oval(ear,0,0,s*.098,.113,.053,.139,coat).rotation.z=.25;
+    ears.push(ear);
     for(const x of [-.71,.65]){
       const z=s*.228,shift=s*.064,back=x<0;
       const knee=[x+(back?.042:.004),.51,z+shift],ankle=[x+(back?-.11:0)+shift,.16,z+shift];
@@ -87,25 +90,87 @@ function cow(parent,loader){
       legs.push({lower,back,s});
     }
   }
-  tube(animal,[[-.86,1.33,.13],[-1.06,1.08,.18],[-1.08,.75,.22],[-1.0,.47,.255]],.026,coat);
-  oval(animal,-1.0,.42,.255,.061,.12,.056,hoof);
+  const tail=group(parent,-.86,1.33,.13);
+  tube(tail,[[0,0,0],[-.20,-.25,.05],[-.22,-.58,.09],[-.14,-.86,.125]],.026,coat);
+  oval(tail,-.14,-.91,.125,.061,.12,.056,hoof);
   bake(animal);
-  for(const {lower} of legs){bake(lower);animal.add(lower)}
-  return {animal,legs};
+  for(const part of [...legs.map(leg=>leg.lower),...ears,tail]){bake(part);animal.add(part)}
+  return {animal,legs,tail,ears};
 }
+function flightPosition(time,out){
+  const approach=1-smooth(28,34.7,time),departure=smooth(44,46.8,time);
+  return out.set(-3.1+48*approach-74*departure,8+14*approach+33*departure+.095*Math.sin(time*1.9),
+    -29.8-30*approach-65*departure);
+}
+
+// Rain dragged off the moving rim disperses at its earlier world positions.
+function rimSpray(scene){
+  const rows=20,count=rows*16,rng=seed(1965);
+  const offsets=[],positions=new Float32Array(count*3),fades=new Float32Array(count);
+  for(let i=0;i<count;i++){
+    const age=Math.floor(i/16)/(rows-1),angle=rng()*Math.PI*2;
+    offsets.push(new T.Vector3(Math.cos(angle)*(3.55+age*rng()),-.16+age*(rng()-.6),Math.sin(angle)*(3.55+age*rng())));
+    fades[i]=(1-age)**1.5*(.22+.65*rng());
+  }
+  const g=new T.BufferGeometry(),buffer=new T.BufferAttribute(positions,3).setUsage(T.DynamicDrawUsage);
+  g.setAttribute('position',buffer);g.setAttribute('fade',new T.BufferAttribute(fades,1));
+  const material=new T.ShaderMaterial({
+    uniforms:{motion:{value:0},height:{value:1}},transparent:true,depthWrite:false,blending:T.AdditiveBlending,
+    vertexShader:`attribute float fade;uniform float height;varying float opacity;
+      void main(){vec4 eye=modelViewMatrix*vec4(position,1.);
+        gl_Position=projectionMatrix*eye;gl_PointSize=clamp(height*.021/max(1.,-eye.z),1.,3.);opacity=fade;}`,
+    fragmentShader:`uniform float motion;varying float opacity;void main(){
+      vec2 d=gl_PointCoord*2.-1.;float glint=exp(-3.*dot(d,d));
+      gl_FragColor=vec4(.42,.63,.79,opacity*motion*glint*.71);}`});
+  const points=new T.Points(g,material),center=new T.Vector3(),previous=new T.Vector3(),viewport=new T.Vector4();
+  points.frustumCulled=false;points.visible=false;scene.add(points);
+  points.onBeforeRender=r=>{material.uniforms.height.value=r.getCurrentViewport(viewport).w};
+  return (t,current)=>{
+    const speed=current.distanceTo(flightPosition(t-.05,previous))/.05;
+    material.uniforms.motion.value=smooth(1.6,9,speed);
+    points.visible=t>=28&&t<46.8&&material.uniforms.motion.value>.01;
+    if(!points.visible)return;
+    for(let row=0;row<rows;row++){
+      const age=row/(rows-1);
+      flightPosition(t-age*.54,center);
+      for(let j=0;j<16;j++){
+        const i=row*16+j,o=offsets[i];
+        buffer.setXYZ(i,center.x+o.x,center.y+o.y-age*age*.76,center.z+o.z+age*.36*Math.sin(t*3+j));
+      }
+    }
+    buffer.needsUpdate=true;
+  };
+}
+
 export function encounter(scene,loader){
-  const {animal,legs}=cow(scene,loader),craft=group(scene);
-  const alloy=mat(0x656e72,{metalness:.91,roughness:.30}),rib=mat(0x384449,{metalness:.79,roughness:.35});
-  const glow=new T.MeshBasicMaterial({color:new T.Color(2.8,2.2,1.5)}),ice=new T.MeshBasicMaterial({color:new T.Color(1.6,3.2,3.4)});
+  const {animal,legs,tail,ears}=cow(scene,loader),craft=group(scene);
+  const response=loader.load(alloyFile);response.wrapS=T.RepeatWrapping;response.anisotropy=8;
+  const alloy=mat(0x9da7ae,{metalness:.78,roughness:.89,roughnessMap:response,bumpMap:response,bumpScale:.006});
+  alloy.onBeforeCompile=shader=>{
+    shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+      diffuseColor.rgb*=texture2D(roughnessMap,vRoughnessMapUv).b;`);
+  };
+  const rib=mat(0x384449,{metalness:.79,roughness:.35});
+  const glow=new T.MeshBasicMaterial({color:new T.Color(1.9,1.75,1.5)});
+  const emitter=mat(0x293338,{metalness:.68,roughness:.32,emissive:0xbed9dd,emissiveIntensity:.12});
+  const gasket=mat(0x191e20,{roughness:.68});
   const profile=[[.01,-.72],[.91,-.71],[1.08,-.60],[1.55,-.53],[1.73,-.47],[2.51,-.40],[3.50,-.21],[3.77,-.06],[3.8,.055],[3.51,.17],[2.15,.45],[1.48,.53],[1.23,.78],[.77,.96],[.01,1.03]];
   mesh(craft,new T.LatheGeometry(profile.map(([r,y])=>new T.Vector2(r,y)),128),alloy);
   const ring=(r,y,th,m)=>{const o=mesh(craft,new T.TorusGeometry(r,th,10,112),m,0,y,0);o.rotation.x=Math.PI/2};
-  ring(3.70,-.085,.035,rib);ring(3.37,-.235,.015,glow);ring(1.62,-.50,.036,ice);ring(1.03,-.68,.07,rib);
-  cylinder(craft,0,-.718,0,.91,.89,.045,ice,64);
-  for(let i=0;i<40;i++){
-    const a=i*Math.PI/20,x=Math.cos(a),z=Math.sin(a);
-    link(craft,[x*1.82,-.495,z*1.82],[x*3.4,-.236,z*3.4],.016,.026,rib);
-    if(i%2===0)oval(craft,x*3.49,-.218,z*3.49,.071,.032,.071,glow);
+  ring(3.70,-.085,.035,rib);ring(3.52,-.193,.026,metal);
+  ring(1.62,-.50,.042,rib);ring(1.52,-.55,.019,emitter);ring(1.03,-.68,.07,rib);
+  cylinder(craft,0,-.718,0,.91,.89,.045,emitter,64);
+  for(const r of [.29,.54,.78])ring(r,-.743,.014,rib);
+  for(let i=0;i<32;i++){
+    const a=i*Math.PI/16,x=Math.cos(a),z=Math.sin(a);
+    link(craft,[x*1.82,-.495,z*1.82],[x*3.4,-.236,z*3.4],.014,.020,rib);
+    if(i%2===0){
+      const pod=group(craft,x*3.48,-.218,z*3.48);pod.rotation.y=-a;
+      oval(pod,0,0,0,.097,.048,.146,gasket);
+      oval(pod,0,-.034,0,.063,.023,.099,glow);
+      const strip=mesh(craft,new T.TorusGeometry(3.62,.017,6,12,.125),glow,0,.116,0);
+      strip.rotation.order='YXZ';strip.rotation.set(Math.PI/2,-a,0);
+    }
   }
   bake(craft);
   const flare=document.createElement('canvas');flare.width=flare.height=96;
@@ -124,7 +189,7 @@ export function encounter(scene,loader){
     }`,
     fragmentShader:`varying vec2 st;varying vec3 radial,eye;uniform float strength;void main(){
       float thickness=smoothstep(0.,.72,abs(dot(normalize(radial),normalize(eye))));
-      float shafts=.78+.14*sin(st.x*94.25)+.08*sin(st.x*50.26);
+      float shafts=.92+.05*sin(st.x*94.25+st.y*2.)+.03*sin(st.x*50.26-st.y*3.);
       float density=(.19+.81*st.y*st.y)*smoothstep(0.,.12,st.y)*thickness;
       gl_FragColor=vec4(.43,.76,.83,strength*shafts*density*.30);
     }`
@@ -135,15 +200,24 @@ export function encounter(scene,loader){
   for(let i=0;i<140;i++){const a=rng()*2*Math.PI,r=Math.sqrt(rng())*2;coords.push(r*Math.cos(a),rng(),r*Math.sin(a))}
   dustGeom.setAttribute('position',new T.Float32BufferAttribute(coords,3));
   const dust=new T.Points(dustGeom,new T.PointsMaterial({color:0xa7dcda,size:.018,transparent:true,opacity:.65,depthWrite:false}));scene.add(dust);
+  const wake=rimSpray(scene);
   function animate(t){
-    const arrive=smooth(28,34.7,t),leave=smooth(44,46.8,t),lift=smooth(36,43.9,t),active=smooth(34.5,35.7,t)*(1-smooth(43.8,44.9,t));
+    const arrive=smooth(28,34.7,t),leave=smooth(44,46.8,t),lift=smooth(36,43.9,t),active=smooth(34.5,35.7,t)*(1-smooth(43.73,44,t));
     for(const {lower,back,s} of legs){
       const weight=smooth(35.9,37.9,t);
       lower.rotation.z=weight*((back?-.39:.28)+.18*Math.sin(t*2.7+s*1.8+(back?2.1:0)));
     }
     craft.visible=t>=28&&t<46.8;
-    craft.position.set(-3.1+48*(1-arrive)-74*leave,8.0+14*(1-arrive)+33*leave+.095*Math.sin(t*1.9),-29.8-30*(1-arrive)-65*leave);
+    flightPosition(t,craft.position);wake(t,craft.position);
+    emitter.emissiveIntensity=.12+3.4*active;
+    bloom.material.opacity=.08+.86*active;
     craft.rotation.set(.028*Math.cos(t),t*.27,.085*(1-arrive)-.25*leave);
+    tail.rotation.x=.13+.21*Math.sin(t*1.14)+.07*Math.sin(t*2.9);
+    for(const [i,ear] of ears.entries()){
+      const flick=Math.max(0,Math.sin(t*1.7+i*2.6))**18;
+      ear.rotation.x=(i?1:-1)*(.07+.24*flick);
+    }
+    animal.scale.y=1+.0035*Math.sin(t*1.8);
     animal.visible=t<43.78;
     animal.position.set(-3.1+.18*Math.sin(lift*Math.PI),.035+6.97*lift,-29.8);
     animal.rotation.set(lift*.13,-.17+lift*.84,.014*Math.sin(t*1.64)+lift*.42);
@@ -151,8 +225,9 @@ export function encounter(scene,loader){
     beam.visible=dust.visible=active>.001;
     beam.position.set(-3.1,height/2,-29.8);beam.scale.y=height;beamMat.uniforms.strength.value=active;
     dust.position.set(-3.1,0,-29.8);dust.scale.y=height;dust.rotation.y=t*.16;
-    pool.position.copy(craft.position);pool.intensity=active*185;
+    dust.material.opacity=.54*active;
+    pool.position.copy(craft.position);pool.intensity=active*138;
     return craft.position;
   }
-  return {animate,beam};
+  return {animate,beam,alloy};
 }

@@ -3,6 +3,7 @@ import {group,mat,seed,smooth} from './geometry.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import leftModel from './left.glb?url';
 import rightModel from './right.glb?url';
+import skinResponse from './hand-surface.webp';
 import skinMap from './hand-albedo.webp';
 
 function twill(){
@@ -39,13 +40,14 @@ function jacketSleeve(hand,s,cloth){
 }
 
 export async function hands(scene,doors){
-  const [left,right,map]=await Promise.all([
+  const [left,right,map,relief]=await Promise.all([
     new GLTFLoader().loadAsync(leftModel),new GLTFLoader().loadAsync(rightModel),
-    new T.TextureLoader().loadAsync(skinMap)
+    new T.TextureLoader().loadAsync(skinMap),new T.TextureLoader().loadAsync(skinResponse)
   ]);
   map.colorSpace=T.SRGBColorSpace;map.anisotropy=8;
-  const skin=new T.MeshPhysicalMaterial({map,roughness:.55,ior:1.4,specularIntensity:.48});
-  const cloth=mat(0xffffff,{map:twill(),roughness:.96});
+  const skin=new T.MeshPhysicalMaterial({map,bumpMap:relief,bumpScale:.00036,roughnessMap:relief,roughness:.94,ior:1.4,specularIntensity:.48});
+  const weave=twill();
+  const cloth=mat(0xffffff,{map:weave,bumpMap:weave,bumpScale:.00025,roughness:.96});
   const arms=[left,right].map((model,i)=>{
     const s=i===0?-1:1,hand=group(scene);
     let surface;model.scene.traverse(o=>{if(o.isSkinnedMesh)surface=o});

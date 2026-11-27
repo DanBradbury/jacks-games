@@ -1,4 +1,5 @@
 import { Particles, Sfx } from '@jack-games/kit';
+import qrcode from 'qrcode-generator';
 import './style.css';
 import {
   FINAL_VOTES,
@@ -303,6 +304,14 @@ function playerChips(s: RoomState) {
 // Native share sheet on phones; desktops just copy the link.
 const canShare = () => matchMedia('(pointer: coarse)').matches && typeof navigator.share === 'function';
 
+// Scan-to-join code for the lobby, drawn locally as an SVG (no network).
+function qrSvg(text: string) {
+  const qr = qrcode(0, 'M');
+  qr.addData(text);
+  qr.make();
+  return qr.createSvgTag({ cellSize: 1, margin: 2, scalable: true });
+}
+
 const chipsBlock = (label: string) => `<div><p class="tag">${label}</p><ul class="players" id="chips"></ul></div>`;
 const hostName = (s: RoomState) => esc(s.players.find((p) => p.vip)?.name ?? 'the host');
 const roundLabel = (s: RoomState) => (s.round >= 3 ? 'Final round' : `Round ${s.round}`);
@@ -335,6 +344,8 @@ function lobby(s: RoomState, vip: boolean) {
     <section class="card">
       <p class="tag">Room code</p>
       <div class="roomcode">${esc(s.code)}</div>
+      <div class="qr" role="img" aria-label="QR code to join ${esc(s.code)}">${qrSvg(link)}</div>
+      <p class="center sub">Scan with a phone camera to join</p>
       <div class="link">${esc(link)}</div>
       <button id="share">${canShare() ? 'Share invite link' : 'Copy invite link'}</button>
     </section>

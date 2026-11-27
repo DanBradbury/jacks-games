@@ -247,6 +247,22 @@ button.ghost {
   line-height: 1;
 }
 
+.qr {
+  width: min(240px, 70vw);
+  margin: 4px auto 0;
+  background: #fff;
+  border: 3px solid var(--line);
+  border-radius: 14px;
+  padding: 6px;
+  box-shadow: var(--shadow);
+}
+
+.qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 .link {
   font-size: 15px;
   word-break: break-all;

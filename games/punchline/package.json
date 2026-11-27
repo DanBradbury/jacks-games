@@ -12,7 +12,8 @@
     "deploy": "npm run build && npx --yes wrangler@4 deploy"
   },
   "dependencies": {
-    "@jack-games/kit": "*"
+    "@jack-games/kit": "*",
+    "qrcode-generator": "2.0.4"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20261101.1"
